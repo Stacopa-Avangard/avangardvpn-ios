@@ -1,0 +1,38 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# XcodeGen generates the project + Info.plists + entitlements from project.yml —
+# project.yml is the single source of truth, so don't commit the generated files.
+*.xcodeproj
+App/Info.plist
+Tunnel/Info.plist
+App/*.entitlements
+Tunnel/*.entitlements
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods (not used, but just in case)
+Pods/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Secrets / signing — NEVER commit
+*.p12
+*.mobileprovision
+*.cer
+*.certSigningRequest
+.env
+
+# macOS
+.DS_Store

@@ -1,0 +1,78 @@
+# XcodeGen spec — the single source of truth for the Xcode project.
+# Generate with `xcodegen generate` (the .xcodeproj is gitignored). This lets the
+# project be authored on any OS and compiled on a macOS runner / Mac.
+name: AvangardVPN
+options:
+  bundleIdPrefix: com.avangard.vpn
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  minimumXcodeGenVersion: "2.38.0"
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    # Signing is filled in locally / by CI (fastlane match). Simulator builds in CI
+    # pass CODE_SIGNING_ALLOWED=NO, so no team is needed for the compile-check.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+# WireGuardKit (the tunnel engine) is added in P3 — it carries a wireguard-go build
+# phase that needs Go on the build machine, so we wire it once the skeleton is green.
+# packages:
+#   WireGuardKit:
+#     url: https://github.com/... (wireguard-apple mirror)
+#     from: "1.0.15"
+
+targets:
+  # ── Main app ──────────────────────────────────────────────────────────────
+  AvangardVPN:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Avangard VPN
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    entitlements:
+      path: App/AvangardVPN.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.avangard.vpn
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+    dependencies:
+      - target: AvangardTunnel
+        embed: true
+
+  # ── Packet Tunnel Provider (VPN runs here) ─────────────────────────────────
+  AvangardTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Tunnel/Sources
+    info:
+      path: Tunnel/Info.plist
+      properties:
+        CFBundleDisplayName: Avangard Tunnel
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    entitlements:
+      path: Tunnel/AvangardTunnel.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.avangard.vpn
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.network-extension
