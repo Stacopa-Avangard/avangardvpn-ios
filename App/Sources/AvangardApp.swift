@@ -1,38 +1,41 @@
 //
 //  AvangardApp.swift — app entry point (SwiftUI lifecycle).
-//  P0 walking skeleton: shows a placeholder. Real Home/Account/region-picker UI
-//  arrives in P4; auth (P1), provisioning (P2), and the tunnel (P3) come first.
+//
+//  Routes between the sign-in flow and the signed-in shell. Provisioning (P2),
+//  the tunnel (P3), and the real Home/Account/region-picker UI (P4) hang off
+//  the signed-in branch.
 //
 import SwiftUI
 
 @main
 struct AvangardVPNApp: App {
+    @StateObject private var auth = AuthStore()
+
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environmentObject(auth)
+                .task { await auth.restore() }
+                .preferredColorScheme(.dark)
         }
     }
 }
 
 struct RootView: View {
+    @EnvironmentObject private var auth: AuthStore
+
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue)
-                Text("Avangard VPN")
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(.white)
-                Text("iOS — scaffold (P0)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        switch auth.state {
+        case .restoring:
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ProgressView().tint(.white)
             }
+        case .signedOut, .awaitingLink:
+            LoginView()
+        case let .signedIn(user):
+            HomeView(user: user)
         }
     }
 }
 
-#Preview {
-    RootView()
-}
