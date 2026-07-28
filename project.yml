@@ -40,6 +40,12 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Lets DEBUG builds reach a backend running on the dev machine over
+        # plain HTTP (see AppConfig.baseURL). This only relaxes ATS for
+        # local/loopback addresses — connections to the production origin are
+        # still held to full ATS requirements.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     entitlements:
       path: App/AvangardVPN.entitlements
       properties:
@@ -52,6 +58,36 @@ targets:
     dependencies:
       - target: AvangardTunnel
         embed: true
+    scheme:
+      testTargets:
+        - AvangardVPNTests
+      # Forwarded into the test process. `$(VAR)` expands from build settings,
+      # so `xcodebuild test AVANGARD_API_BASE=…` reaches the tests. (The
+      # TEST_RUNNER_-prefix trick only works for UI-test runners, not for unit
+      # tests hosted inside the app.)
+      environmentVariables:
+        AVANGARD_API_BASE: $(AVANGARD_API_BASE)
+        AVANGARD_VERIFIED_SESSION_ID: $(AVANGARD_VERIFIED_SESSION_ID)
+        AVANGARD_VERIFIED_SESSION_ID_2: $(AVANGARD_VERIFIED_SESSION_ID_2)
+        AVANGARD_VERIFIED_SESSION_ID_3: $(AVANGARD_VERIFIED_SESSION_ID_3)
+
+  # ── Tests ──────────────────────────────────────────────────────────────────
+  # Integration tests that exercise the real API client against a backend run
+  # locally (`pnpm dev` in fixidn/wireguard-dashboard). They skip themselves
+  # when AVANGARD_API_BASE is unset, so CI's unsigned compile-check is unaffected.
+  AvangardVPNTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: AvangardVPN
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.tests
+        # Signing a test bundle needs an Info.plist; let Xcode synthesise one
+        # rather than checking in a file that carries no real configuration.
+        GENERATE_INFOPLIST_FILE: "YES"
 
   # ── Packet Tunnel Provider (VPN runs here) ─────────────────────────────────
   AvangardTunnel:

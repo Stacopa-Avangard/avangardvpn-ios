@@ -12,6 +12,7 @@ Three targets in one Xcode project (defined by [`project.yml`](project.yml), Xco
 |---|---|
 | **AvangardVPN** (app) | SwiftUI UI, poll-login, on-device keygen, region picker; tokens + private key in **Keychain**; API via `URLSession` |
 | **AvangardTunnel** (app-extension) | `NEPacketTunnelProvider` — the WireGuard tunnel, driven by **WireGuardKit** (from `wireguard-apple`) |
+| **AvangardVPNTests** (unit-test) | Integration tests against a locally-run backend — see [Tests](#tests) |
 | App Group `group.com.avangard.vpn` | shares config between app ↔ extension |
 
 - Bundle IDs: app `com.avangard.vpn`, tunnel `com.avangard.vpn.network-extension`
@@ -21,8 +22,14 @@ Three targets in one Xcode project (defined by [`project.yml`](project.yml), Xco
 ## Prerequisites (for signed/device builds)
 
 - **Apple Developer Program** ($99/yr) — required for the NetworkExtension entitlement + TestFlight.
+  **Not yet provisioned for this app** (as of 2026-07-28), which is what blocks
+  P3 on-device, P5, and P6. A free Apple ID cannot carry the
+  `packet-tunnel-provider` entitlement, so there is no workaround.
 - App IDs + capabilities: **Network Extensions** (packet-tunnel-provider) + **App Groups** on both bundle IDs.
 - Signing via `fastlane match` (for CI) or Xcode automatic signing (local).
+
+Everything through P2 (and the UI work in P4) needs none of this — it builds and
+tests on the Simulator unsigned.
 
 ## Build
 
@@ -41,12 +48,58 @@ open AvangardVPN.xcodeproj    # develop / run on a device from Xcode
 Apple account**. (VPN can't actually run in the Simulator — device testing needs a
 real iPhone + signing.)
 
+## Tests
+
+`AvangardVPNTests` exercises the real API client against a backend running
+locally from `fixidn/wireguard-dashboard` — no production traffic, no emails
+sent (dev logs the magic link to stdout instead).
+
+```bash
+# terminal 1 — in the wireguard-dashboard checkout
+cd backend && cp .env.example .env   # fill in throwaway secrets, RESEND_API_KEY empty
+pnpm install && pnpm seed:admin -- --email=ios-test@avangard.local --name="iOS Tester"
+pnpm dev 2>&1 | tee /tmp/backend.log
+
+# terminal 2 — here
+BACKEND_LOG=/tmp/backend.log Scripts/run-auth-tests.sh
+```
+
+The script does what a test inside the Simulator can't: it reads the magic-link
+token out of the backend log and "clicks" the link, so the test can then claim
+the session exactly as the app would.
+
+To poke at the signed-in UI by hand without typing an address and opening a
+mail client:
+
+```bash
+BACKEND_LOG=/tmp/backend.log Scripts/run-dev-session.sh
+```
+
+It prepares a verified session the same way and launches the app already signed
+in (the app claims it on launch — DEBUG only, see `AuthStore.restore`). Set
+`AVANGARD_DEV_TAB=account` to open straight onto the Account screen.
+
+Two things about how these run, both deliberate:
+
+- **No `CODE_SIGNING_ALLOWED=NO`.** The Keychain refuses to store anything for
+  an unsigned bundle (`errSecMissingEntitlement`, -34018), so the tests rely on
+  the ad-hoc signature Xcode gives Simulator builds. Still no Apple account.
+- Config reaches the tests as **scheme environment variables** fed from build
+  settings. The `TEST_RUNNER_`-prefix trick only works for UI-test runners.
+
+Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
+`xcodebuild test` (and CI's compile-check) stays green with no backend around.
+
 ## Roadmap
 
 - [x] **P0** — repo + XcodeGen scaffold (app + tunnel stub) + CI compile-check
-- [ ] **P1** — Auth: poll-login (`/auth/poll`), Keychain token store
-- [ ] **P2** — Provisioning: Curve25519 keygen, `POST /api/me/devices/regions`, build config
+- [x] **P1** — Auth: poll-login (`/auth/poll`), Keychain token store, auto-refresh
+      on 401, sign-in UI. Verified end-to-end against a local backend.
+- [x] **P2** — Provisioning: Curve25519 keygen (CryptoKit), `POST /api/me/devices/regions`,
+      local config assembly, region picker. Verified end-to-end against a local backend.
 - [ ] **P3** — Tunnel: `PacketTunnelProvider` + WireGuardKit (wireguard-go build)
-- [ ] **P4** — SwiftUI UI: Home / Account / region picker (dark/glass)
+- [x] **P4** — SwiftUI UI: Connect / Account tabs, region picker sheet, quota
+      meter, shared theme tokens (dark/glass). The connect control is present
+      but disabled until P3 lands.
 - [ ] **P5** — IPv6 dual-stack (`assignedIpv6`) + Always-on (`NEOnDemandRule`)
 - [ ] **P6** — TestFlight distribution
