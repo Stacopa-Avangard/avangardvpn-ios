@@ -117,6 +117,10 @@ actor APIClient {
         return try await authorized(path: "api/me/devices/regions", method: "POST", body: body)
     }
 
+    func usage() async throws -> UsageSummary {
+        try await authorized(path: "api/me/usage", method: "GET", body: NoBody?.none)
+    }
+
     func devices() async throws -> [DeviceSummary] {
         let list: DeviceList = try await authorized(
             path: "api/me/devices", method: "GET", body: NoBody?.none

@@ -76,7 +76,8 @@ BACKEND_LOG=/tmp/backend.log Scripts/run-dev-session.sh
 ```
 
 It prepares a verified session the same way and launches the app already signed
-in (the app claims it on launch — DEBUG only, see `AuthStore.restore`).
+in (the app claims it on launch — DEBUG only, see `AuthStore.restore`). Set
+`AVANGARD_DEV_TAB=account` to open straight onto the Account screen.
 
 Two things about how these run, both deliberate:
 
@@ -97,6 +98,8 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
 - [x] **P2** — Provisioning: Curve25519 keygen (CryptoKit), `POST /api/me/devices/regions`,
       local config assembly, region picker. Verified end-to-end against a local backend.
 - [ ] **P3** — Tunnel: `PacketTunnelProvider` + WireGuardKit (wireguard-go build)
-- [ ] **P4** — SwiftUI UI: Home / Account / region picker (dark/glass)
+- [x] **P4** — SwiftUI UI: Connect / Account tabs, region picker sheet, quota
+      meter, shared theme tokens (dark/glass). The connect control is present
+      but disabled until P3 lands.
 - [ ] **P5** — IPv6 dual-stack (`assignedIpv6`) + Always-on (`NEOnDemandRule`)
 - [ ] **P6** — TestFlight distribution

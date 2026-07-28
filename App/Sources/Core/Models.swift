@@ -99,3 +99,22 @@ struct DeviceSummary: Codable, Equatable, Identifiable {
 struct DeviceList: Codable {
     let devices: [DeviceSummary]
 }
+
+/// `GET /api/me/usage` — bandwidth against the monthly quota.
+struct UsageSummary: Codable, Equatable {
+    /// Period key the backend is accumulating into, e.g. `2026-07`.
+    let period: String
+    let usedBytes: Int64
+    let quotaBytes: Int64
+    /// True when the account has no monthly cap (`quotaBytes <= 0`).
+    let unlimited: Bool
+    /// True once the backend removed the peers for going over quota.
+    let suspended: Bool
+
+    /// Share of the quota consumed. Zero when unlimited — there is no
+    /// denominator to divide by, and a meter would be meaningless.
+    var fraction: Double {
+        guard !unlimited, quotaBytes > 0 else { return 0 }
+        return Double(usedBytes) / Double(quotaBytes)
+    }
+}
