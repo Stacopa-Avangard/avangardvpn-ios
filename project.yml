@@ -89,6 +89,41 @@ targets:
         # rather than checking in a file that carries no real configuration.
         GENERATE_INFOPLIST_FILE: "YES"
 
+  # ── Device-test build (free Apple ID) ──────────────────────────────────────
+  # Same app sources, minus the two things a free "Personal Team" cannot sign:
+  # the embedded tunnel extension (packet-tunnel-provider is paid-only) and the
+  # App Groups entitlement (also paid-only). Nothing built so far uses either —
+  # they belong to the tunnel, which arrives in P3 — so this runs the real app
+  # on a real iPhone with no paid account.
+  #
+  #   xcodegen generate && open AvangardVPN.xcodeproj
+  #   → scheme "AvangardVPNDeviceTest" → your Personal Team → Run
+  #
+  # The bundle id differs from production ON PURPOSE. App IDs are globally
+  # unique across Apple Developer accounts, so letting a personal team claim
+  # `com.avangard.vpn` risks blocking the real account from registering it
+  # later. A throwaway test build is not worth that.
+  AvangardVPNDeviceTest:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+    info:
+      path: App/DeviceTest-Info.plist
+      properties:
+        CFBundleDisplayName: Avangard Dev
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Lets a DEBUG build on-device talk to a backend running on the dev
+        # machine over the LAN. Only relaxes ATS for local addresses.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+
   # ── Packet Tunnel Provider (VPN runs here) ─────────────────────────────────
   AvangardTunnel:
     type: app-extension
