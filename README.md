@@ -48,6 +48,40 @@ open AvangardVPN.xcodeproj    # develop / run on a device from Xcode
 Apple account**. (VPN can't actually run in the Simulator — device testing needs a
 real iPhone + signing.)
 
+## Trying it on a real iPhone (no paid account)
+
+Everything built so far — sign-in, region provisioning, the UI — uses **no paid
+capability**. App Groups and NetworkExtension belong to the tunnel (P3), which
+isn't here yet. So the `AvangardVPNDeviceTest` scheme runs the real app on a
+real iPhone signed with a **free Apple ID**:
+
+```bash
+xcodegen generate && open AvangardVPN.xcodeproj
+```
+
+In Xcode: scheme **AvangardVPNDeviceTest** → target → Signing & Capabilities →
+*Automatically manage signing* → Team = **your own Personal Team** → select
+your iPhone → Run. On first launch, approve the developer certificate under
+Settings → General → VPN & Device Management.
+
+What works: sign-in, choosing a region, a **real keypair generated on the
+phone**, the assembled config, account + quota screens. **Connect stays
+disabled** — there is no tunnel yet.
+
+Two things to know:
+
+- **Free-signed builds expire after 7 days.** Re-run from Xcode to renew.
+- The bundle id is `com.avangard.vpn.devtest`, deliberately **not** the
+  production `com.avangard.vpn`. App IDs are globally unique across Apple
+  Developer accounts, so letting a personal team claim the production id risks
+  blocking the real account from registering it later.
+
+By default the app talks to production, so you need an account there. To point
+it at a backend on your Mac instead, add `AVANGARD_API_BASE=http://<mac-lan-ip>:3000`
+to the scheme's environment variables (Product → Scheme → Edit Scheme → Run →
+Arguments) with the phone on the same Wi-Fi. That variable is DEBUG-only and
+compiled out of Release builds.
+
 ## Tests
 
 `AvangardVPNTests` exercises the real API client against a backend running
