@@ -61,12 +61,45 @@ xcodegen generate && open AvangardVPN.xcodeproj
 
 In Xcode: scheme **AvangardVPNDeviceTest** → target → Signing & Capabilities →
 *Automatically manage signing* → Team = **your own Personal Team** → select
-your iPhone → Run. On first launch, approve the developer certificate under
-Settings → General → VPN & Device Management.
+your iPhone → Run.
+
+Once signing is set up once, re-installing is faster from the CLI — which
+matters because free-signed builds expire every 7 days:
+
+```bash
+DEVELOPMENT_TEAM=<your-personal-team-id> Scripts/install-on-device.sh
+```
+
+It picks the connected device itself, builds, checks the bundle carries no paid
+entitlement, and installs. Find your team id with:
+
+```bash
+security find-identity -v -p codesigning
+security find-certificate -c "<the Apple Development line>" -p \
+  | openssl x509 -noout -subject     # OU=... is the team id
+```
+
+Two one-time steps on the phone:
+
+- **Settings → Privacy & Security → Developer Mode** → on. iOS 16+ refuses to
+  run self-built apps without it, and turning it on reboots the phone. Until
+  then the device shows as *available* rather than *connected* and builds fail
+  with `Developer Mode disabled`.
+- After the first install: **Settings → General → VPN & Device Management** →
+  trust the developer certificate.
+
+A **Personal Team is separate from any organisation** the same Apple ID belongs
+to — different team id, its own certificate, its own App IDs. Signing with it
+registers nothing against the organisation's account.
 
 What works: sign-in, choosing a region, a **real keypair generated on the
 phone**, the assembled config, account + quota screens. **Connect stays
 disabled** — there is no tunnel yet.
+
+Verified on real hardware 2026-07-28: builds, signs under a Personal Team, and
+installs onto an iPhone 12 (iOS). Not yet exercised by a person end-to-end —
+in particular, opening the magic link from a real inbox and having the app pick
+the session up by polling has still only been tested via scripts.
 
 Two things to know:
 
