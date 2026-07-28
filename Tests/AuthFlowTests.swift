@@ -18,8 +18,12 @@ import XCTest
 
 final class AuthFlowTests: XCTestCase {
 
+    /// Whether a backend was supplied to test against. Empty counts as absent
+    /// (see `AppConfig.apiBaseOverride`), and production is refused outright —
+    /// these tests open login sessions and would otherwise hit the live server.
     private var isConfigured: Bool {
-        ProcessInfo.processInfo.environment["AVANGARD_API_BASE"] != nil
+        guard let base = AppConfig.apiBaseOverride else { return false }
+        return base != AppConfig.productionBaseURL.absoluteString
     }
 
     override func setUp() {
@@ -36,7 +40,7 @@ final class AuthFlowTests: XCTestCase {
     /// override that makes local testing possible at all.
     func testBaseURLHonoursDebugOverride() throws {
         try XCTSkipUnless(isConfigured, "set AVANGARD_API_BASE to run integration tests")
-        let expected = ProcessInfo.processInfo.environment["AVANGARD_API_BASE"]!
+        let expected = try XCTUnwrap(AppConfig.apiBaseOverride)
         XCTAssertEqual(AppConfig.baseURL.absoluteString, expected)
     }
 
@@ -71,7 +75,7 @@ final class AuthFlowTests: XCTestCase {
     /// the bearer header in one pass.
     func testClaimVerifiedSessionAndCallAuthenticatedEndpoint() async throws {
         try XCTSkipUnless(isConfigured, "set AVANGARD_API_BASE to run integration tests")
-        guard let sessionId = ProcessInfo.processInfo.environment["AVANGARD_VERIFIED_SESSION_ID"] else {
+        guard let sessionId = AppConfig.environment("AVANGARD_VERIFIED_SESSION_ID") else {
             throw XCTSkip("no pre-verified session supplied; run via Scripts/run-auth-tests.sh")
         }
 
@@ -101,7 +105,7 @@ final class AuthFlowTests: XCTestCase {
     /// session usable. The old refresh dies server-side the moment this returns.
     func testRefreshRotatesAndPersists() async throws {
         try XCTSkipUnless(isConfigured, "set AVANGARD_API_BASE to run integration tests")
-        guard let sessionId = ProcessInfo.processInfo.environment["AVANGARD_VERIFIED_SESSION_ID_2"] else {
+        guard let sessionId = AppConfig.environment("AVANGARD_VERIFIED_SESSION_ID_2") else {
             throw XCTSkip("no second pre-verified session supplied")
         }
 

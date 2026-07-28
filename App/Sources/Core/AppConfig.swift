@@ -11,6 +11,24 @@ import Foundation
 enum AppConfig {
     static let productionBaseURL = URL(string: "https://vpn.stacopa-avangard.com")!
 
+    /// Read an environment variable, treating an **empty value as absent**.
+    ///
+    /// That distinction is load-bearing. The test scheme forwards these from
+    /// build settings (`AVANGARD_API_BASE: $(AVANGARD_API_BASE)`), and an
+    /// *unset* build setting expands to an empty string rather than
+    /// disappearing — so the variables are always *present* in the test
+    /// process. Treating "present" as "configured" is what let the integration
+    /// tests run against production instead of skipping themselves.
+    static func environment(_ name: String) -> String? {
+        guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    /// The backend override supplied by the environment, or nil when none was.
+    static var apiBaseOverride: String? { environment("AVANGARD_API_BASE") }
+
     /// Backend origin. Serves both `/auth/*` and `/api/*`.
     ///
     /// In DEBUG builds only, `AVANGARD_API_BASE` redirects the app at a local
@@ -20,8 +38,7 @@ enum AppConfig {
     /// environment variable.
     static let baseURL: URL = {
         #if DEBUG
-        if let override = ProcessInfo.processInfo.environment["AVANGARD_API_BASE"],
-           let url = URL(string: override) {
+        if let override = apiBaseOverride, let url = URL(string: override) {
             return url
         }
         #endif
