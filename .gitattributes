@@ -1,0 +1,13 @@
+# This repo is worked on from both macOS and Windows, and Windows git here runs
+# with core.autocrlf=true. Pin the line endings stored in the repository to LF
+# so a Windows checkout can never commit CRLF into a shell script — Scripts/*.sh
+# run on macOS, where a stray CR breaks the shebang line with a confusing
+# `bash: \r: command not found`.
+* text=auto eol=lf
+
+# Binary — never transformed.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.mobileprovision binary
+*.p12 binary

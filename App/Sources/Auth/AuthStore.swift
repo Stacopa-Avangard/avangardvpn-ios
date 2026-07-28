@@ -40,7 +40,7 @@ final class AuthStore: ObservableObject {
         // can be launched without typing an address and opening a mail client.
         // See Scripts/run-dev-session.sh.
         if !TokenStore.hasSession,
-           let devSession = ProcessInfo.processInfo.environment["AVANGARD_DEV_SESSION_ID"] {
+           let devSession = AppConfig.environment("AVANGARD_DEV_SESSION_ID") {
             await claimDevSession(devSession)
             if case .signedIn = state { return }
         }

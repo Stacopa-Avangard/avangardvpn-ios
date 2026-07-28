@@ -11,8 +11,12 @@ import XCTest
 
 final class ProvisioningTests: XCTestCase {
 
+    /// Whether a backend was supplied to test against. Empty counts as absent
+    /// (see `AppConfig.apiBaseOverride`), and production is refused outright —
+    /// these tests register devices and would otherwise do so on the live server.
     private var isConfigured: Bool {
-        ProcessInfo.processInfo.environment["AVANGARD_API_BASE"] != nil
+        guard let base = AppConfig.apiBaseOverride else { return false }
+        return base != AppConfig.productionBaseURL.absoluteString
     }
 
     // MARK: - Keys (no backend needed)
@@ -134,7 +138,7 @@ final class ProvisioningTests: XCTestCase {
 
     /// Claim a pre-verified login session so the following calls are authorised.
     private func signIn(using variable: String) async throws {
-        guard let sessionId = ProcessInfo.processInfo.environment[variable] else {
+        guard let sessionId = AppConfig.environment(variable) else {
             throw XCTSkip("no pre-verified session supplied; run via Scripts/run-auth-tests.sh")
         }
         let claim = try await APIClient.shared.poll(loginSessionId: sessionId)

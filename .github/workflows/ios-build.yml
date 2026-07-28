@@ -1,8 +1,8 @@
 name: Build iOS (unsigned)
 
-# Compile-check on a macOS runner. Builds for the iOS Simulator with signing
-# disabled, so it validates the code WITHOUT an Apple Developer account. Device
-# builds / TestFlight (signed) come later once signing (fastlane match) is set up.
+# Compile-check + offline unit tests on a macOS runner. Everything here builds
+# for the iOS Simulator without an Apple Developer account. Device builds /
+# TestFlight (signed) come later once signing (fastlane match) is set up.
 
 on:
   push:
@@ -17,15 +17,17 @@ concurrency:
 
 jobs:
   build:
-    # macos-15 ships Xcode 16, which reads the current XcodeGen project format (77).
-    runs-on: macos-15
+    # macos-26 ships Xcode 26, matching the Mac this app is developed on. Holding
+    # CI on an older Xcode than the dev machine hides SDK-level breakage until
+    # someone opens the project locally — which is exactly when it costs most.
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select newest Xcode + show version
+      - name: Select Xcode + show version
         run: |
-          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || echo /Applications/Xcode.app)"
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || echo /Applications/Xcode.app)"
           xcodebuild -version
 
       - name: Install XcodeGen
@@ -34,10 +36,43 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build (iOS Simulator, unsigned)
+      - name: Build app (iOS Simulator, unsigned)
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
             -scheme AvangardVPN \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+
+      - name: Build device-test target (unsigned)
+        # The free-Apple-ID target shares App/Sources with the production app but
+        # deliberately carries none of its entitlements. Building it here catches
+        # the case where new app code starts depending on a paid capability —
+        # otherwise that only surfaces when someone tries to install on a phone.
+        run: |
+          xcodebuild build \
+            -project AvangardVPN.xcodeproj \
+            -target AvangardVPNDeviceTest \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+
+      - name: Run offline unit tests
+        # `xcodebuild build` does not compile the test bundle, so without this
+        # step nothing in Tests/ is checked at all. AVANGARD_API_BASE is left
+        # unset, so the integration tests skip themselves and only the offline
+        # ones run: keygen format, config assembly, Keychain round-trip.
+        #
+        # Deliberately NO CODE_SIGNING_ALLOWED=NO here: the Keychain refuses to
+        # store anything for an unsigned bundle (errSecMissingEntitlement,
+        # -34018), so the tests rely on the ad-hoc signature Xcode gives
+        # Simulator builds. Still no Apple account. Mirrors the reasoning in
+        # Scripts/run-auth-tests.sh.
+        run: |
+          DEVICE_ID="$(xcrun simctl list devices available --json \
+            | python3 -c 'import json,sys; ds=json.load(sys.stdin)["devices"]; \
+              print(next(d["udid"] for k in sorted(ds, reverse=True) for d in ds[k] if "iPhone" in d["name"]))')"
+          echo "==> simulator $DEVICE_ID"
+          xcodebuild test \
+            -project AvangardVPN.xcodeproj \
+            -scheme AvangardVPN \
+            -destination "id=$DEVICE_ID"
