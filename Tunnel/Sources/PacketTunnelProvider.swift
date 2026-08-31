@@ -92,7 +92,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        Self.log.log("startTunnel: starting backend \(WireGuardAdapter.backendVersion, privacy: .public)")
+        /*
+          No backend version here. `WireGuardAdapter.backendVersion` exists but
+          is internal, and making it public would mean carrying a third patch in
+          our wireguard-apple fork — the fork's whole value is that its diff is
+          two lines and can be audited at a glance. A log line is not worth that.
+        */
+        Self.log.log("startTunnel: starting backend")
 
         adapter.start(tunnelConfiguration: configuration) { error in
             if let error {
