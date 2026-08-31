@@ -122,15 +122,17 @@ jobs:
       # is both the configuration that ships and the only one the Go bridge
       # supports, so this step now checks the real thing.
       #
-      # `-target`, not `-scheme`: the scheme carrying the test action moved to
-      # AvangardVPNDeviceTest, for the reasons in project.yml.
+      # Uses a dedicated `AvangardVPN` scheme declared in project.yml, because
+      # xcodebuild refuses `-target` whenever `-derivedDataPath` is also given,
+      # and -derivedDataPath is what keeps the SPM checkouts at a cacheable
+      # path. The test action lives on the AvangardVPNDeviceTest scheme.
       - name: Build app + tunnel (iOS device, unsigned)
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
             -derivedDataPath .derivedData \
-            -target AvangardVPN \
-            -sdk iphoneos \
+            -scheme AvangardVPN \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Build device-test target (unsigned)
@@ -142,8 +144,8 @@ jobs:
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
             -derivedDataPath .derivedData \
-            -target AvangardVPNDeviceTest \
-            -sdk iphonesimulator \
+            -scheme AvangardVPNDeviceTest \
+            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Run offline unit tests

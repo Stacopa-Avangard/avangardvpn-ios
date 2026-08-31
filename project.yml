@@ -285,3 +285,21 @@ targets:
       arguments: make $(ACTION)
       passSettings: true
       workingDirectory: $(BUILD_DIR)/../../SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
+
+# ── Schemes ────────────────────────────────────────────────────────────────
+# AvangardVPNDeviceTest gets its scheme from its own `scheme:` block above,
+# because that one carries the test action. This one exists purely so the app
+# is buildable by name.
+#
+# It is not optional: `xcodebuild` refuses `-target` whenever
+# `-derivedDataPath` is also given —
+#
+#   error: The flag -scheme, -testProductsPath, or -xctestrun is required
+#          when specifying -derivedDataPath
+#
+# and CI pins -derivedDataPath so the SPM checkouts sit at a cacheable path.
+schemes:
+  AvangardVPN:
+    build:
+      targets:
+        AvangardVPN: all
