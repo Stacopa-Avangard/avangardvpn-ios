@@ -70,12 +70,21 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      # Confirms the toolchain the wireguard-go bridge needs is present before
-      # anything spends minutes discovering it is not. WireGuardKit wants >= 1.19;
-      # macos-26 ships 1.24.x. Xcode does not bundle Go, so this is a real
-      # dependency on the image rather than on the SDK.
-      - name: Show Go version (wireguard-go bridge needs it)
-        run: go version
+      # Installs Go, because the runner does not have it. The earlier version of
+      # this step was just `go version` on the assumption that macos-26 shipped
+      # Go 1.24.13 — it does not ship Go at all, and CI answered with
+      # `go: command not found`. Xcode never bundled it either, so on the Mac
+      # this is `brew install go` before the first build.
+      #
+      # cache: false on purpose. setup-go's own cache keys off go.sum, and
+      # wireguard-go's go.sum lives inside the SPM checkout, which does not
+      # exist yet at this point in the job. The two explicit cache steps above
+      # cover the same directories and key off project.yml instead.
+      - name: Set up Go (wireguard-go bridge needs it)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
 
       - name: Build app (iOS Simulator, unsigned)
         run: |

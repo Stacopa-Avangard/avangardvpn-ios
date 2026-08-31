@@ -184,8 +184,9 @@ targets:
   # location is the first thing to suspect if make cannot find its Makefile.
   #
   # Needs Go >= 1.19 on the build machine. Xcode does NOT bundle it —
-  # `brew install go` on the Mac before the first build. CI is covered:
-  # macos-26 ships Go 1.24.13.
+  # `brew install go` on the Mac before the first build. The macOS CI runner
+  # does not ship Go either — CI proved that with `go: command not found` — so
+  # the workflow installs it with actions/setup-go.
   #
   # An empty `type` is what marks a legacy target. XcodeGen has no `none` case
   # at all — `type: none` was a guess, and CI rejected the spec outright with
