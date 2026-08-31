@@ -115,13 +115,22 @@ jobs:
           echo "xcrun --find make:"; xcrun --find make || true
           echo "PATH=$PATH"
 
-      - name: Build app (iOS Simulator, unsigned)
+      # Built for the DEVICE, not the Simulator. A packet-tunnel extension
+      # cannot run in the Simulator, and upstream's Makefile has no GOOS case
+      # for `iphonesimulator` — it silently builds a macOS libwg-go.a, which
+      # then fails to link (_darwin_arm_init_mach_exception_handler). iphoneos
+      # is both the configuration that ships and the only one the Go bridge
+      # supports, so this step now checks the real thing.
+      #
+      # `-target`, not `-scheme`: the scheme carrying the test action moved to
+      # AvangardVPNDeviceTest, for the reasons in project.yml.
+      - name: Build app + tunnel (iOS device, unsigned)
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
             -derivedDataPath .derivedData \
-            -scheme AvangardVPN \
-            -destination 'generic/platform=iOS Simulator' \
+            -target AvangardVPN \
+            -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Build device-test target (unsigned)
@@ -156,5 +165,5 @@ jobs:
           xcodebuild test \
             -project AvangardVPN.xcodeproj \
             -derivedDataPath .derivedData \
-            -scheme AvangardVPN \
+            -scheme AvangardVPNDeviceTest \
             -destination "id=$DEVICE_ID"

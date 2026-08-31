@@ -111,18 +111,6 @@ targets:
     dependencies:
       - target: AvangardTunnel
         embed: true
-    scheme:
-      testTargets:
-        - AvangardVPNTests
-      # Forwarded into the test process. `$(VAR)` expands from build settings,
-      # so `xcodebuild test AVANGARD_API_BASE=…` reaches the tests. (The
-      # TEST_RUNNER_-prefix trick only works for UI-test runners, not for unit
-      # tests hosted inside the app.)
-      environmentVariables:
-        AVANGARD_API_BASE: $(AVANGARD_API_BASE)
-        AVANGARD_VERIFIED_SESSION_ID: $(AVANGARD_VERIFIED_SESSION_ID)
-        AVANGARD_VERIFIED_SESSION_ID_2: $(AVANGARD_VERIFIED_SESSION_ID_2)
-        AVANGARD_VERIFIED_SESSION_ID_3: $(AVANGARD_VERIFIED_SESSION_ID_3)
 
   # ── Tests ──────────────────────────────────────────────────────────────────
   # Integration tests that exercise the real API client against a backend run
@@ -134,7 +122,7 @@ targets:
     sources:
       - path: Tests
     dependencies:
-      - target: AvangardVPN
+      - target: AvangardVPNDeviceTest
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.tests
@@ -142,12 +130,20 @@ targets:
         # rather than checking in a file that carries no real configuration.
         GENERATE_INFOPLIST_FILE: "YES"
 
-  # ── Device-test build (free Apple ID) ──────────────────────────────────────
+  # ── Device-test build (free Apple ID) + CI test host ───────────────────────
   # Same app sources, minus the two things a free "Personal Team" cannot sign:
   # the embedded tunnel extension (packet-tunnel-provider is paid-only) and the
-  # App Groups entitlement (also paid-only). Nothing built so far uses either —
-  # they belong to the tunnel, which arrives in P3 — so this runs the real app
-  # on a real iPhone with no paid account.
+  # App Groups entitlement (also paid-only). So it runs the real app UI on a
+  # real iPhone with no paid account.
+  #
+  # ⚠️ P3 changed what this target is for. It used to be a convenience; now the
+  # unit tests are hosted here too, because it is the only host that can run on
+  # a Simulator at all — see the scheme block below. Deleting it would take the
+  # test suite with it.
+  #
+  # It also stays a real signal: it shares App/Sources with production, so when
+  # the app side finally wires up NETunnelProviderManager, this target is where
+  # that first shows up as a build failure rather than as a failed install.
   #
   #   xcodegen generate && open AvangardVPN.xcodeproj
   #   → scheme "AvangardVPNDeviceTest" → your Personal Team → Run
@@ -181,6 +177,32 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+    # The unit tests are hosted HERE, not in AvangardVPN, and that is a P3
+    # consequence rather than a preference.
+    #
+    # A packet-tunnel Network Extension cannot run in the iOS Simulator at all,
+    # and upstream's Makefile reflects that: it maps GOOS for `macosx` and
+    # `iphoneos` and has no case for `iphonesimulator`, so a simulator build
+    # silently produces a macOS libwg-go.a and the link fails on
+    # _darwin_arm_init_mach_exception_handler. Hosting the tests in AvangardVPN
+    # would drag the embedded extension — and therefore the Go bridge — into
+    # every simulator test run.
+    #
+    # This target embeds no extension by design, so it is the one host that can
+    # run on a simulator. The tests only touch App/Sources and Shared/Sources,
+    # which it compiles identically.
+    scheme:
+      testTargets:
+        - AvangardVPNTests
+      # Forwarded into the test process. `$(VAR)` expands from build settings,
+      # so `xcodebuild test AVANGARD_API_BASE=…` reaches the tests. (The
+      # TEST_RUNNER_-prefix trick only works for UI-test runners, not for unit
+      # tests hosted inside the app.)
+      environmentVariables:
+        AVANGARD_API_BASE: $(AVANGARD_API_BASE)
+        AVANGARD_VERIFIED_SESSION_ID: $(AVANGARD_VERIFIED_SESSION_ID)
+        AVANGARD_VERIFIED_SESSION_ID_2: $(AVANGARD_VERIFIED_SESSION_ID_2)
+        AVANGARD_VERIFIED_SESSION_ID_3: $(AVANGARD_VERIFIED_SESSION_ID_3)
 
   # ── Packet Tunnel Provider (VPN runs here) ─────────────────────────────────
   AvangardTunnel:
