@@ -216,6 +216,17 @@ targets:
     type: ""
     platform: iOS
     legacy:
-      toolPath: /usr/bin/make
+      # `/usr/bin/env`, not `/usr/bin/make`. Upstream's own project hardcodes
+      # /usr/bin/make and so did this, but that path is a Command Line Tools
+      # shim — the macOS CI image has Xcode without standalone CLT, so the file
+      # is simply absent and Xcode fails with "unable to spawn process". env
+      # lives in the base system and resolves make from the build PATH, which
+      # works whether make comes from Xcode or from CLT.
+      #
+      # `$(ACTION)` matches upstream and is load-bearing: the Makefile's default
+      # goal is not the library, but it defines a `build` target, and Xcode sets
+      # ACTION=build.
+      toolPath: /usr/bin/env
+      arguments: make $(ACTION)
       passSettings: true
       workingDirectory: ${BUILD_DIR%Build/*}SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
