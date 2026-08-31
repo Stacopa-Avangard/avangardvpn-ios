@@ -1,6 +1,10 @@
 # Xcode
 build/
 DerivedData/
+# CI pins -derivedDataPath here so the SPM checkouts sit at a fixed, cacheable
+# path (see .github/workflows/ios-build.yml). Local builds still use Xcode's
+# own DerivedData above; this only appears if you run the CI commands by hand.
+.derivedData/
 *.xcuserstate
 xcuserdata/
 *.xcscmblueprint

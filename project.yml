@@ -19,12 +19,60 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 
-# WireGuardKit (the tunnel engine) is added in P3 — it carries a wireguard-go build
-# phase that needs Go on the build machine, so we wire it once the skeleton is green.
-# packages:
-#   WireGuardKit:
-#     url: https://github.com/... (wireguard-apple mirror)
-#     from: "1.0.15"
+# WireGuardKit — the tunnel engine. Wired in P3.
+#
+# ⚠️ This points at OUR FORK, not at WireGuard/wireguard-apple, and that is a
+# workaround rather than a preference. Upstream's Package.swift declares
+# `swift-tools-version:5.3` while using `.macOS(.v12)` / `.iOS(.v15)`, both of
+# which need PackageDescription 5.5, so SwiftPM refuses the package outright:
+#
+#     /Package.swift:9:17: error: 'v12' is unavailable
+#
+# Upstream 901fe1cf (2023-02-14, "App: bump minimum OS versions") raised the
+# platforms without raising the tools-version, and master has had no commit
+# since 2023-02-15 — so the package has been unconsumable via SwiftPM that whole
+# time. It goes unnoticed because the WireGuard app compiles these sources
+# directly instead of resolving the package.
+#
+# The fork carries exactly TWO build fixes and nothing else — verified with
+# `gh api .../compare/WireGuard:master...Stacopa-Avangard:master`, which reports
+# 2 files, +2 -1:
+#
+#   Package.swift            5.3 -> 5.5      (the manifest above)
+#   WireGuardKitC.h          +#include <sys/types.h>
+#
+# The second one is the same fix Mullvad carries on their production fork: the
+# header uses u_int32_t / u_char / u_int16_t while including only key.h and
+# x25519.h, which Xcode 26's explicit module builds reject. WireGuardKit is MIT,
+# so both are permitted; re-run that compare before assuming anything else
+# differs.
+#
+# ⚠️ This fork is frozen on upstream's February 2023 dependency set —
+# wireguard-go from 2023-02-09 and golang.org/x/crypto v0.6.0, which is where
+# ChaCha20-Poly1305 and Curve25519 live. No known advisory in that window
+# touches WireGuard's usage (they are all in x/crypto's SSH package), but the
+# gap is unmanaged. mullvad/wireguard-apple's `mullvad-master` runs
+# wireguard-go 2023-12-11 and x/crypto v0.31.0 and is maintained into 2026;
+# moving to it, or lifting those two pins into this fork, is tracked work and
+# should happen before real users depend on this tunnel. It was not done in P3
+# because Mullvad's branch also carries product divergence (multihop, DAITA,
+# in-tunnel TCP, and a "Stop configuring tunnel settings" change that may move
+# responsibility for network settings into the caller) and that needs an audit,
+# not a swap.
+#
+# Keep the fork NAMED `wireguard-apple`. SwiftPM names its checkout directory
+# after the repo, and the WireGuardGoBridge target below runs `make` inside
+# .../SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo.
+#
+# Pinned by revision rather than by tag. Upstream tags read `1.0.16-27`, and
+# SemVer treats everything after the hyphen as a PRE-RELEASE identifier, which
+# SPM excludes from range requirements — so `from:` matches nothing and fails
+# with a message about no matching versions, which reads like the package is
+# gone rather than like the requirement is wrong.
+packages:
+  WireGuardKit:
+    url: https://github.com/Stacopa-Avangard/wireguard-apple
+    revision: 65774b04139bfdb3d81769e64b5adbd901a974ec
 
 targets:
   # ── Main app ──────────────────────────────────────────────────────────────
@@ -33,6 +81,11 @@ targets:
     platform: iOS
     sources:
       - path: App/Sources
+      # Shared with the tunnel extension, which is a separate process and so a
+      # separate module — the only way both sides agree on the shape of the
+      # config is to compile the same file. Both app targets need it because
+      # TunnelConfig (in App/Sources) hands back a TunnelProfile.
+      - path: Shared/Sources
     info:
       path: App/Info.plist
       properties:
@@ -58,18 +111,6 @@ targets:
     dependencies:
       - target: AvangardTunnel
         embed: true
-    scheme:
-      testTargets:
-        - AvangardVPNTests
-      # Forwarded into the test process. `$(VAR)` expands from build settings,
-      # so `xcodebuild test AVANGARD_API_BASE=…` reaches the tests. (The
-      # TEST_RUNNER_-prefix trick only works for UI-test runners, not for unit
-      # tests hosted inside the app.)
-      environmentVariables:
-        AVANGARD_API_BASE: $(AVANGARD_API_BASE)
-        AVANGARD_VERIFIED_SESSION_ID: $(AVANGARD_VERIFIED_SESSION_ID)
-        AVANGARD_VERIFIED_SESSION_ID_2: $(AVANGARD_VERIFIED_SESSION_ID_2)
-        AVANGARD_VERIFIED_SESSION_ID_3: $(AVANGARD_VERIFIED_SESSION_ID_3)
 
   # ── Tests ──────────────────────────────────────────────────────────────────
   # Integration tests that exercise the real API client against a backend run
@@ -81,7 +122,7 @@ targets:
     sources:
       - path: Tests
     dependencies:
-      - target: AvangardVPN
+      - target: AvangardVPNDeviceTest
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.tests
@@ -89,12 +130,20 @@ targets:
         # rather than checking in a file that carries no real configuration.
         GENERATE_INFOPLIST_FILE: "YES"
 
-  # ── Device-test build (free Apple ID) ──────────────────────────────────────
+  # ── Device-test build (free Apple ID) + CI test host ───────────────────────
   # Same app sources, minus the two things a free "Personal Team" cannot sign:
   # the embedded tunnel extension (packet-tunnel-provider is paid-only) and the
-  # App Groups entitlement (also paid-only). Nothing built so far uses either —
-  # they belong to the tunnel, which arrives in P3 — so this runs the real app
-  # on a real iPhone with no paid account.
+  # App Groups entitlement (also paid-only). So it runs the real app UI on a
+  # real iPhone with no paid account.
+  #
+  # ⚠️ P3 changed what this target is for. It used to be a convenience; now the
+  # unit tests are hosted here too, because it is the only host that can run on
+  # a Simulator at all — see the scheme block below. Deleting it would take the
+  # test suite with it.
+  #
+  # It also stays a real signal: it shares App/Sources with production, so when
+  # the app side finally wires up NETunnelProviderManager, this target is where
+  # that first shows up as a build failure rather than as a failed install.
   #
   #   xcodegen generate && open AvangardVPN.xcodeproj
   #   → scheme "AvangardVPNDeviceTest" → your Personal Team → Run
@@ -108,6 +157,11 @@ targets:
     platform: iOS
     sources:
       - path: App/Sources
+      # Shared with the tunnel extension, which is a separate process and so a
+      # separate module — the only way both sides agree on the shape of the
+      # config is to compile the same file. Both app targets need it because
+      # TunnelConfig (in App/Sources) hands back a TunnelProfile.
+      - path: Shared/Sources
     info:
       path: App/DeviceTest-Info.plist
       properties:
@@ -123,6 +177,42 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        # The Swift module keeps the production name even though the product
+        # and bundle id do not. The tests say `@testable import AvangardVPN`,
+        # and they are testing exactly these sources — this target compiles the
+        # same App/Sources and Shared/Sources. Without this the import fails
+        # with "Unable to resolve module dependency: 'AvangardVPN'".
+        #
+        # Renaming the import in the test files instead would have been the
+        # wrong fix: it would tie the tests to a target that exists for build
+        # reasons, when what they actually test is the app.
+        PRODUCT_MODULE_NAME: AvangardVPN
+    # The unit tests are hosted HERE, not in AvangardVPN, and that is a P3
+    # consequence rather than a preference.
+    #
+    # A packet-tunnel Network Extension cannot run in the iOS Simulator at all,
+    # and upstream's Makefile reflects that: it maps GOOS for `macosx` and
+    # `iphoneos` and has no case for `iphonesimulator`, so a simulator build
+    # silently produces a macOS libwg-go.a and the link fails on
+    # _darwin_arm_init_mach_exception_handler. Hosting the tests in AvangardVPN
+    # would drag the embedded extension — and therefore the Go bridge — into
+    # every simulator test run.
+    #
+    # This target embeds no extension by design, so it is the one host that can
+    # run on a simulator. The tests only touch App/Sources and Shared/Sources,
+    # which it compiles identically.
+    scheme:
+      testTargets:
+        - AvangardVPNTests
+      # Forwarded into the test process. `$(VAR)` expands from build settings,
+      # so `xcodebuild test AVANGARD_API_BASE=…` reaches the tests. (The
+      # TEST_RUNNER_-prefix trick only works for UI-test runners, not for unit
+      # tests hosted inside the app.)
+      environmentVariables:
+        AVANGARD_API_BASE: $(AVANGARD_API_BASE)
+        AVANGARD_VERIFIED_SESSION_ID: $(AVANGARD_VERIFIED_SESSION_ID)
+        AVANGARD_VERIFIED_SESSION_ID_2: $(AVANGARD_VERIFIED_SESSION_ID_2)
+        AVANGARD_VERIFIED_SESSION_ID_3: $(AVANGARD_VERIFIED_SESSION_ID_3)
 
   # ── Packet Tunnel Provider (VPN runs here) ─────────────────────────────────
   AvangardTunnel:
@@ -130,6 +220,7 @@ targets:
     platform: iOS
     sources:
       - path: Tunnel/Sources
+      - path: Shared/Sources
     info:
       path: Tunnel/Info.plist
       properties:
@@ -147,3 +238,78 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.network-extension
+    dependencies:
+      - package: WireGuardKit
+      # Ordering, not just linkage: this makes `make` run before the extension
+      # links, so libwg-go.a exists by then.
+      - target: WireGuardGoBridge
+
+  # ── wireguard-go bridge (external build target) ────────────────────────────
+  # Not optional, and not something a build phase can replace. WireGuardKit's
+  # own README says it plainly: "WireGuardKit links against wireguard-go-bridge
+  # library, but it cannot build it automatically due to Swift package manager
+  # limitations." SPM will happily resolve and compile the Swift half, then fail
+  # at link time looking for -lwg-go. This target is what produces it.
+  #
+  # The working directory is inside the resolved SPM checkout, so it has to be
+  # derived from a build setting rather than written as a path in this repo.
+  #
+  # ⚠️ It used to read `${BUILD_DIR%Build/*}...`, which is BASH suffix-stripping
+  # syntax. Xcode build settings do not have it: `BUILD_DIR%Build/*` is simply
+  # an unknown setting name, so it expanded to nothing and the target ran in the
+  # project directory instead. The failure did not say so — it said
+  # "unable to spawn process '/usr/bin/make' (No such file or directory)", which
+  # reads like a missing tool. It is the missing WORKING DIRECTORY that produces
+  # ENOENT on spawn; the tool path in that message is a red herring. A CI probe
+  # confirmed /usr/bin/make was present the whole time.
+  #
+  # `$(BUILD_DIR)/../..` uses only plain `$(VAR)` and walks up from
+  # <DerivedData>/Build/Products to <DerivedData>, which is where SourcePackages
+  # lives. That holds for Xcode's own DerivedData and for CI's -derivedDataPath.
+  #
+  # Needs Go >= 1.19 on the build machine. Xcode does NOT bundle it —
+  # `brew install go` on the Mac before the first build. The macOS CI runner
+  # does not ship Go either — CI proved that with `go: command not found` — so
+  # the workflow installs it with actions/setup-go.
+  #
+  # An empty `type` is what marks a legacy target. XcodeGen has no `none` case
+  # at all — `type: none` was a guess, and CI rejected the spec outright with
+  # "Unknown Target type: none" before compiling a single file. The empty string
+  # is the documented value (ProjectSpec.md lists it as `""` for legacy
+  # targets); the `legacy:` block below is what makes it an Xcode External
+  # Build System target.
+  WireGuardGoBridge:
+    type: ""
+    platform: iOS
+    legacy:
+      # `/usr/bin/env` + `make` rather than a hardcoded `/usr/bin/make` (which is
+      # what upstream's own project uses). Both work here — the probe proved
+      # /usr/bin/make exists on the runner — but env resolves make from PATH, so
+      # it also survives a Mac that has Xcode without standalone Command Line
+      # Tools.
+      #
+      # `$(ACTION)` matches upstream and is load-bearing: the Makefile's default
+      # goal is not the library, but it defines a `build` target, and Xcode sets
+      # ACTION=build.
+      toolPath: /usr/bin/env
+      arguments: make $(ACTION)
+      passSettings: true
+      workingDirectory: $(BUILD_DIR)/../../SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
+
+# ── Schemes ────────────────────────────────────────────────────────────────
+# AvangardVPNDeviceTest gets its scheme from its own `scheme:` block above,
+# because that one carries the test action. This one exists purely so the app
+# is buildable by name.
+#
+# It is not optional: `xcodebuild` refuses `-target` whenever
+# `-derivedDataPath` is also given —
+#
+#   error: The flag -scheme, -testProductsPath, or -xctestrun is required
+#          when specifying -derivedDataPath
+#
+# and CI pins -derivedDataPath so the SPM checkouts sit at a cacheable path.
+schemes:
+  AvangardVPN:
+    build:
+      targets:
+        AvangardVPN: all

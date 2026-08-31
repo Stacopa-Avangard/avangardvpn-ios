@@ -33,15 +33,106 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      # macOS 15 replaced GNU rsync with openrsync, and the bridge's Makefile
+      # copies the Go toolchain with `rsync -a --delete --exclude=...`, which
+      # openrsync fails on (make reported Error 20). Homebrew's rsync lands in
+      # /opt/homebrew/bin, which sits ahead of /usr/bin on this runner's PATH,
+      # so installing it is enough — no patch to upstream's Makefile.
+      - name: Install GNU rsync (Makefile copies GOROOT with it)
+        run: brew install rsync
+
+      # Caching exists because of P3, and it is not a micro-optimisation. The
+      # tunnel extension links WireGuardKit, which links wireguard-go — so from
+      # P3 onward every build compiles a Go static library from scratch. On a
+      # developer's Mac that is a one-time cost: DerivedData persists and make
+      # is timestamp-driven, so the second build skips it entirely. A CI runner
+      # is a clean machine every single run, and would otherwise pay it in full
+      # every time.
+      #
+      # That asymmetry matters more than the minutes. CI is the ONLY thing that
+      # compiles this project when the change was authored on the Windows
+      # laptop — there is no Swift compiler there — so a CI that becomes painful
+      # is a CI that starts getting skipped, and then unverified Swift reaches
+      # the Mac.
+      #
+      # Keyed on project.yml because that is where the WireGuardKit pin lives:
+      # change the version, miss the cache, which is the correct behaviour.
+      - name: Cache SPM checkouts
+        uses: actions/cache@v4
+        with:
+          path: .derivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      # The Go build and module caches are what actually make the wireguard-go
+      # rebuild cheap; the SPM cache above only saves re-cloning the checkout.
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: go-${{ runner.os }}-
+
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build app (iOS Simulator, unsigned)
+      # Installs Go, because the runner does not have it. The earlier version of
+      # this step was just `go version` on the assumption that macos-26 shipped
+      # Go 1.24.13 — it does not ship Go at all, and CI answered with
+      # `go: command not found`. Xcode never bundled it either, so on the Mac
+      # this is `brew install go` before the first build.
+      #
+      # cache: false on purpose. setup-go's own cache keys off go.sum, and
+      # wireguard-go's go.sum lives inside the SPM checkout, which does not
+      # exist yet at this point in the job. The two explicit cache steps above
+      # cover the same directories and key off project.yml instead.
+      - name: Set up Go (wireguard-go bridge needs it)
+        uses: actions/setup-go@v5
+        with:
+      # 1.21, not "latest". The bridge's Makefile copies the whole Go toolchain
+      # and then PATCHES the Go runtime with goruntime-boottime-over-monotonic.diff
+      # — it makes Go's monotonic clock follow boot time, which keeps running
+      # while the device sleeps, so WireGuard's handshake and keepalive timers
+      # do not stall overnight. That patch was written against Go 1.17-1.21 and
+      # will not apply to an arbitrary newer runtime; skipping it is not an
+      # option, because the failure it prevents is silent.
+      #
+      # 1.21 is evidenced, not guessed: mullvad/wireguard-apple ships iOS builds
+      # from a byte-identical copy of that diff and declares `go 1.21`.
+          go-version: "1.21"
+          cache: false
+
+      # Non-fatal probe. The bridge target spawns make by absolute path, and
+      # /usr/bin/make does not exist on this image — so if the target still
+      # cannot find it, this is the output that says where make actually lives
+      # instead of costing another run to discover.
+      - name: Locate make (diagnostic, never fails)
+        run: |
+          echo "which -a make:"; which -a make || true
+          echo "ls -l /usr/bin/make:"; ls -l /usr/bin/make || true
+          echo "xcrun --find make:"; xcrun --find make || true
+          echo "PATH=$PATH"
+
+      # Built for the DEVICE, not the Simulator. A packet-tunnel extension
+      # cannot run in the Simulator, and upstream's Makefile has no GOOS case
+      # for `iphonesimulator` — it silently builds a macOS libwg-go.a, which
+      # then fails to link (_darwin_arm_init_mach_exception_handler). iphoneos
+      # is both the configuration that ships and the only one the Go bridge
+      # supports, so this step now checks the real thing.
+      #
+      # Uses a dedicated `AvangardVPN` scheme declared in project.yml, because
+      # xcodebuild refuses `-target` whenever `-derivedDataPath` is also given,
+      # and -derivedDataPath is what keeps the SPM checkouts at a cacheable
+      # path. The test action lives on the AvangardVPNDeviceTest scheme.
+      - name: Build app + tunnel (iOS device, unsigned)
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
+            -derivedDataPath .derivedData \
             -scheme AvangardVPN \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Build device-test target (unsigned)
@@ -52,8 +143,9 @@ jobs:
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
-            -target AvangardVPNDeviceTest \
-            -sdk iphonesimulator \
+            -derivedDataPath .derivedData \
+            -scheme AvangardVPNDeviceTest \
+            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Run offline unit tests
@@ -74,5 +166,6 @@ jobs:
           echo "==> simulator $DEVICE_ID"
           xcodebuild test \
             -project AvangardVPN.xcodeproj \
-            -scheme AvangardVPN \
+            -derivedDataPath .derivedData \
+            -scheme AvangardVPNDeviceTest \
             -destination "id=$DEVICE_ID"
