@@ -177,6 +177,16 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        # The Swift module keeps the production name even though the product
+        # and bundle id do not. The tests say `@testable import AvangardVPN`,
+        # and they are testing exactly these sources — this target compiles the
+        # same App/Sources and Shared/Sources. Without this the import fails
+        # with "Unable to resolve module dependency: 'AvangardVPN'".
+        #
+        # Renaming the import in the test files instead would have been the
+        # wrong fix: it would tie the tests to a target that exists for build
+        # reasons, when what they actually test is the app.
+        PRODUCT_MODULE_NAME: AvangardVPN
     # The unit tests are hosted HERE, not in AvangardVPN, and that is a P3
     # consequence rather than a preference.
     #
