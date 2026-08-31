@@ -21,16 +21,34 @@ settings:
 
 # WireGuardKit — the tunnel engine. Wired in P3.
 #
-# ⚠️ exactVersion, NOT `from:`. Upstream tags read `1.0.16-27`, `1.0.15-26` and
-# so on, and SemVer treats everything after the hyphen as a PRE-RELEASE
-# identifier. SPM excludes pre-releases from range requirements, so
-# `from: "1.0.16"` matches nothing whatsoever — and it fails at resolution with
-# a message about no matching versions, which reads like the package is gone
-# rather than like the requirement is wrong. Pin the tag and bump it on purpose.
+# ⚠️ This points at OUR FORK, not at WireGuard/wireguard-apple, and that is a
+# workaround rather than a preference. Upstream's Package.swift declares
+# `swift-tools-version:5.3` while using `.macOS(.v12)` / `.iOS(.v15)`, both of
+# which need PackageDescription 5.5, so SwiftPM refuses the package outright:
+#
+#     /Package.swift:9:17: error: 'v12' is unavailable
+#
+# Upstream 901fe1cf (2023-02-14, "App: bump minimum OS versions") raised the
+# platforms without raising the tools-version, and master has had no commit
+# since 2023-02-15 — so the package has been unconsumable via SwiftPM that whole
+# time. It goes unnoticed because the WireGuard app compiles these sources
+# directly instead of resolving the package. Our fork changes exactly one
+# character, 5.3 -> 5.5, and nothing else. WireGuardKit is MIT, so this is
+# permitted; check upstream before assuming any other difference exists.
+#
+# Keep the fork NAMED `wireguard-apple`. SwiftPM names its checkout directory
+# after the repo, and the WireGuardGoBridge target below runs `make` inside
+# .../SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo.
+#
+# Pinned by revision rather than by tag. Upstream tags read `1.0.16-27`, and
+# SemVer treats everything after the hyphen as a PRE-RELEASE identifier, which
+# SPM excludes from range requirements — so `from:` matches nothing and fails
+# with a message about no matching versions, which reads like the package is
+# gone rather than like the requirement is wrong.
 packages:
   WireGuardKit:
-    url: https://github.com/WireGuard/wireguard-apple
-    exactVersion: "1.0.16-27"
+    url: https://github.com/Stacopa-Avangard/wireguard-apple
+    revision: a49b14a7ca288d8f67e2333e3d04c8f1270bcee4
 
 targets:
   # ── Main app ──────────────────────────────────────────────────────────────
