@@ -187,12 +187,14 @@ targets:
   # `brew install go` on the Mac before the first build. CI is covered:
   # macos-26 ships Go 1.24.13.
   #
-  # ⚠️ `type: none` is what XcodeGen uses for a target with no product; the
-  # `legacy:` block is what turns it into an Xcode External Build System target.
-  # If xcodegen rejects this key, that is the first thing to fix — it fails at
-  # project generation, loudly, before anything is compiled.
+  # An empty `type` is what marks a legacy target. XcodeGen has no `none` case
+  # at all — `type: none` was a guess, and CI rejected the spec outright with
+  # "Unknown Target type: none" before compiling a single file. The empty string
+  # is the documented value (ProjectSpec.md lists it as `""` for legacy
+  # targets); the `legacy:` block below is what makes it an Xcode External
+  # Build System target.
   WireGuardGoBridge:
-    type: none
+    type: ""
     platform: iOS
     legacy:
       toolPath: /usr/bin/make
