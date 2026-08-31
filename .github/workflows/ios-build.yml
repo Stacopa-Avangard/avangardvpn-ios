@@ -33,13 +33,55 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      # Caching exists because of P3, and it is not a micro-optimisation. The
+      # tunnel extension links WireGuardKit, which links wireguard-go — so from
+      # P3 onward every build compiles a Go static library from scratch. On a
+      # developer's Mac that is a one-time cost: DerivedData persists and make
+      # is timestamp-driven, so the second build skips it entirely. A CI runner
+      # is a clean machine every single run, and would otherwise pay it in full
+      # every time.
+      #
+      # That asymmetry matters more than the minutes. CI is the ONLY thing that
+      # compiles this project when the change was authored on the Windows
+      # laptop — there is no Swift compiler there — so a CI that becomes painful
+      # is a CI that starts getting skipped, and then unverified Swift reaches
+      # the Mac.
+      #
+      # Keyed on project.yml because that is where the WireGuardKit pin lives:
+      # change the version, miss the cache, which is the correct behaviour.
+      - name: Cache SPM checkouts
+        uses: actions/cache@v4
+        with:
+          path: .derivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      # The Go build and module caches are what actually make the wireguard-go
+      # rebuild cheap; the SPM cache above only saves re-cloning the checkout.
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: go-${{ runner.os }}-
+
       - name: Generate Xcode project
         run: xcodegen generate
+
+      # Confirms the toolchain the wireguard-go bridge needs is present before
+      # anything spends minutes discovering it is not. WireGuardKit wants >= 1.19;
+      # macos-26 ships 1.24.x. Xcode does not bundle Go, so this is a real
+      # dependency on the image rather than on the SDK.
+      - name: Show Go version (wireguard-go bridge needs it)
+        run: go version
 
       - name: Build app (iOS Simulator, unsigned)
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
+            -derivedDataPath .derivedData \
             -scheme AvangardVPN \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
@@ -52,6 +94,7 @@ jobs:
         run: |
           xcodebuild build \
             -project AvangardVPN.xcodeproj \
+            -derivedDataPath .derivedData \
             -target AvangardVPNDeviceTest \
             -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
@@ -74,5 +117,6 @@ jobs:
           echo "==> simulator $DEVICE_ID"
           xcodebuild test \
             -project AvangardVPN.xcodeproj \
+            -derivedDataPath .derivedData \
             -scheme AvangardVPN \
             -destination "id=$DEVICE_ID"

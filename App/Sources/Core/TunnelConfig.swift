@@ -3,8 +3,16 @@
 //
 //  The server hands back its half (its public key, endpoint, the assigned
 //  address, the PSK); the private key never leaves this device, so the complete
-//  config only ever exists here. Output is `wg-quick` format because that is
-//  what WireGuardKit's parser consumes in P3.
+//  config only ever exists here.
+//
+//  ⚠️ This header used to say the wg-quick output was "what WireGuardKit's
+//  parser consumes in P3". That was wrong, and P3 found out: the wg-quick
+//  parser lives in wireguard-apple's WireGuardApp target, not in the
+//  `WireGuardKit` library product, so nothing in the extension can read it.
+//  The tunnel is handed a `TunnelProfile` instead — structured values, no text
+//  format in the middle. `wgQuickConfig` stays because the config sheet in
+//  HomeView shows it to the user, which is a genuine use; it is simply not the
+//  transport.
 //
 import Foundation
 
@@ -45,7 +53,23 @@ struct TunnelConfig: Equatable {
             : advertised
     }
 
-    /// `wg-quick` INI form — what WireGuardKit parses in P3.
+    /// What actually reaches the tunnel extension, via
+    /// `NETunnelProviderProtocol.providerConfiguration`. Same values as
+    /// `wgQuickConfig` below, minus the text format — see TunnelProfile.swift.
+    var profile: TunnelProfile {
+        TunnelProfile(
+            privateKey: privateKey,
+            addresses: addresses,
+            dns: dns,
+            serverPublicKey: serverPublicKey,
+            presharedKey: presharedKey,
+            allowedIps: allowedIps,
+            endpoint: endpoint
+        )
+    }
+
+    /// `wg-quick` INI form. Shown to the user in the config sheet; NOT the
+    /// transport to the extension (the header explains why).
     var wgQuickConfig: String {
         var lines = [
             "[Interface]",
