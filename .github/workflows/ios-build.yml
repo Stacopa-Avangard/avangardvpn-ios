@@ -33,6 +33,14 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      # macOS 15 replaced GNU rsync with openrsync, and the bridge's Makefile
+      # copies the Go toolchain with `rsync -a --delete --exclude=...`, which
+      # openrsync fails on (make reported Error 20). Homebrew's rsync lands in
+      # /opt/homebrew/bin, which sits ahead of /usr/bin on this runner's PATH,
+      # so installing it is enough — no patch to upstream's Makefile.
+      - name: Install GNU rsync (Makefile copies GOROOT with it)
+        run: brew install rsync
+
       # Caching exists because of P3, and it is not a micro-optimisation. The
       # tunnel extension links WireGuardKit, which links wireguard-go — so from
       # P3 onward every build compiles a Go static library from scratch. On a
@@ -83,7 +91,17 @@ jobs:
       - name: Set up Go (wireguard-go bridge needs it)
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+      # 1.21, not "latest". The bridge's Makefile copies the whole Go toolchain
+      # and then PATCHES the Go runtime with goruntime-boottime-over-monotonic.diff
+      # — it makes Go's monotonic clock follow boot time, which keeps running
+      # while the device sleeps, so WireGuard's handshake and keepalive timers
+      # do not stall overnight. That patch was written against Go 1.17-1.21 and
+      # will not apply to an arbitrary newer runtime; skipping it is not an
+      # option, because the failure it prevents is silent.
+      #
+      # 1.21 is evidenced, not guessed: mullvad/wireguard-apple ships iOS builds
+      # from a byte-identical copy of that diff and declares `go 1.21`.
+          go-version: "1.21"
           cache: false
 
       # Non-fatal probe. The bridge target spawns make by absolute path, and

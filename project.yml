@@ -32,9 +32,33 @@ settings:
 # platforms without raising the tools-version, and master has had no commit
 # since 2023-02-15 — so the package has been unconsumable via SwiftPM that whole
 # time. It goes unnoticed because the WireGuard app compiles these sources
-# directly instead of resolving the package. Our fork changes exactly one
-# character, 5.3 -> 5.5, and nothing else. WireGuardKit is MIT, so this is
-# permitted; check upstream before assuming any other difference exists.
+# directly instead of resolving the package.
+#
+# The fork carries exactly TWO build fixes and nothing else — verified with
+# `gh api .../compare/WireGuard:master...Stacopa-Avangard:master`, which reports
+# 2 files, +2 -1:
+#
+#   Package.swift            5.3 -> 5.5      (the manifest above)
+#   WireGuardKitC.h          +#include <sys/types.h>
+#
+# The second one is the same fix Mullvad carries on their production fork: the
+# header uses u_int32_t / u_char / u_int16_t while including only key.h and
+# x25519.h, which Xcode 26's explicit module builds reject. WireGuardKit is MIT,
+# so both are permitted; re-run that compare before assuming anything else
+# differs.
+#
+# ⚠️ This fork is frozen on upstream's February 2023 dependency set —
+# wireguard-go from 2023-02-09 and golang.org/x/crypto v0.6.0, which is where
+# ChaCha20-Poly1305 and Curve25519 live. No known advisory in that window
+# touches WireGuard's usage (they are all in x/crypto's SSH package), but the
+# gap is unmanaged. mullvad/wireguard-apple's `mullvad-master` runs
+# wireguard-go 2023-12-11 and x/crypto v0.31.0 and is maintained into 2026;
+# moving to it, or lifting those two pins into this fork, is tracked work and
+# should happen before real users depend on this tunnel. It was not done in P3
+# because Mullvad's branch also carries product divergence (multihop, DAITA,
+# in-tunnel TCP, and a "Stop configuring tunnel settings" change that may move
+# responsibility for network settings into the caller) and that needs an audit,
+# not a swap.
 #
 # Keep the fork NAMED `wireguard-apple`. SwiftPM names its checkout directory
 # after the repo, and the WireGuardGoBridge target below runs `make` inside
@@ -48,7 +72,7 @@ settings:
 packages:
   WireGuardKit:
     url: https://github.com/Stacopa-Avangard/wireguard-apple
-    revision: a49b14a7ca288d8f67e2333e3d04c8f1270bcee4
+    revision: 65774b04139bfdb3d81769e64b5adbd901a974ec
 
 targets:
   # ── Main app ──────────────────────────────────────────────────────────────
