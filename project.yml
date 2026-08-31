@@ -195,11 +195,21 @@ targets:
   # limitations." SPM will happily resolve and compile the Swift half, then fail
   # at link time looking for -lwg-go. This target is what produces it.
   #
-  # The working directory is inside the resolved SPM checkout, which is why it
-  # is written as a build-setting expansion rather than a path in this repo:
-  # `${BUILD_DIR%Build/*}` trims DerivedData's Build/ suffix to reach
-  # SourcePackages/. It follows Xcode's layout, so a non-default DerivedData
-  # location is the first thing to suspect if make cannot find its Makefile.
+  # The working directory is inside the resolved SPM checkout, so it has to be
+  # derived from a build setting rather than written as a path in this repo.
+  #
+  # ⚠️ It used to read `${BUILD_DIR%Build/*}...`, which is BASH suffix-stripping
+  # syntax. Xcode build settings do not have it: `BUILD_DIR%Build/*` is simply
+  # an unknown setting name, so it expanded to nothing and the target ran in the
+  # project directory instead. The failure did not say so — it said
+  # "unable to spawn process '/usr/bin/make' (No such file or directory)", which
+  # reads like a missing tool. It is the missing WORKING DIRECTORY that produces
+  # ENOENT on spawn; the tool path in that message is a red herring. A CI probe
+  # confirmed /usr/bin/make was present the whole time.
+  #
+  # `$(BUILD_DIR)/../..` uses only plain `$(VAR)` and walks up from
+  # <DerivedData>/Build/Products to <DerivedData>, which is where SourcePackages
+  # lives. That holds for Xcode's own DerivedData and for CI's -derivedDataPath.
   #
   # Needs Go >= 1.19 on the build machine. Xcode does NOT bundle it —
   # `brew install go` on the Mac before the first build. The macOS CI runner
@@ -216,12 +226,11 @@ targets:
     type: ""
     platform: iOS
     legacy:
-      # `/usr/bin/env`, not `/usr/bin/make`. Upstream's own project hardcodes
-      # /usr/bin/make and so did this, but that path is a Command Line Tools
-      # shim — the macOS CI image has Xcode without standalone CLT, so the file
-      # is simply absent and Xcode fails with "unable to spawn process". env
-      # lives in the base system and resolves make from the build PATH, which
-      # works whether make comes from Xcode or from CLT.
+      # `/usr/bin/env` + `make` rather than a hardcoded `/usr/bin/make` (which is
+      # what upstream's own project uses). Both work here — the probe proved
+      # /usr/bin/make exists on the runner — but env resolves make from PATH, so
+      # it also survives a Mac that has Xcode without standalone Command Line
+      # Tools.
       #
       # `$(ACTION)` matches upstream and is load-bearing: the Makefile's default
       # goal is not the library, but it defines a `build` target, and Xcode sets
@@ -229,4 +238,4 @@ targets:
       toolPath: /usr/bin/env
       arguments: make $(ACTION)
       passSettings: true
-      workingDirectory: ${BUILD_DIR%Build/*}SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
+      workingDirectory: $(BUILD_DIR)/../../SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
