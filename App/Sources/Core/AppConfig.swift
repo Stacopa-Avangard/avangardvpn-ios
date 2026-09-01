@@ -9,7 +9,16 @@
 import Foundation
 
 enum AppConfig {
-    static let productionBaseURL = URL(string: "https://vpn.stacopa-avangard.com")!
+    /// Moved onto the brand domain 2026-09-01. `app.avangardvpn.com` is a second
+    /// Caddy vhost reverse-proxying the same backend — an alias, not a move, so
+    /// `vpn.stacopa-avangard.com` still serves this identical origin and always
+    /// will. Either value works; this one is what users are sent to.
+    ///
+    /// iOS was free to take the new name outright because nothing has shipped yet.
+    /// Android was not: every installed build compiled the old host in, and its
+    /// in-app updater reads `/api/version` there, so that host can never be
+    /// retired. Do not "tidy" it away on the server.
+    static let productionBaseURL = URL(string: "https://app.avangardvpn.com")!
 
     /// Read an environment variable, treating an **empty value as absent**.
     ///
