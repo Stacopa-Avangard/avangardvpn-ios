@@ -34,7 +34,29 @@ final class TunnelStore: ObservableObject {
     private var configuration: VPNConfiguration?
     private var observation: Task<Void, Never>?
 
-    init(store: VPNConfigurationStore = SystemVPNConfigurationStore()) {
+    /*
+      Two initialisers rather than one with a default argument.
+
+      Under the Swift 5 language mode a default argument expression is
+      evaluated in a nonisolated context, while SystemVPNConfigurationStore is
+      main-actor isolated — conforming to a @MainActor protocol infers that
+      isolation onto the whole type, so dropping the annotation would not help.
+      Writing `init(store: VPNConfigurationStore = SystemVPNConfigurationStore())`
+      fails with:
+
+        error: call to main actor-isolated initializer 'init()' in a
+               synchronous nonisolated context
+
+      SE-0411 makes default arguments adopt the enclosing isolation, but only
+      from the Swift 6 language mode. A convenience initialiser evaluates the
+      expression in the initialiser's own body, which is main-actor isolated
+      like the rest of the class.
+    */
+    convenience init() {
+        self.init(store: SystemVPNConfigurationStore())
+    }
+
+    init(store: VPNConfigurationStore) {
         self.store = store
     }
 
