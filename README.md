@@ -1,7 +1,7 @@
 # Avangard VPN — iOS
 
 Native iOS client for **Avangard VPN**, mirroring the Android app
-(`fixidn/avangard-vpn-app`). Talks to the **same backend** (`fixidn/wireguard-dashboard`,
+(`Stacopa-Avangard/avangardvpn-android`). Talks to the **same backend** (`Stacopa-Avangard/avangardvpn-server`,
 `https://vpn.stacopa-avangard.com`) — no backend changes needed.
 
 ## Architecture
@@ -118,7 +118,7 @@ compiled out of Release builds.
 ## Tests
 
 `AvangardVPNTests` exercises the real API client against a backend running
-locally from `fixidn/wireguard-dashboard` — no production traffic, no emails
+locally from `Stacopa-Avangard/avangardvpn-server` — no production traffic, no emails
 sent (dev logs the magic link to stdout instead).
 
 ```bash

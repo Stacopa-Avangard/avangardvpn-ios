@@ -132,7 +132,7 @@ targets:
 
   # ── Tests ──────────────────────────────────────────────────────────────────
   # Integration tests that exercise the real API client against a backend run
-  # locally (`pnpm dev` in fixidn/wireguard-dashboard). They skip themselves
+  # locally (`pnpm dev` in Stacopa-Avangard/avangardvpn-server). They skip themselves
   # when AVANGARD_API_BASE is unset, so CI's unsigned compile-check is unaffected.
   AvangardVPNTests:
     type: bundle.unit-test
