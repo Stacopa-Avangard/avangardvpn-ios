@@ -1,104 +1,193 @@
 //
 //  AccountView.swift — who you are, what you've used, which devices you have.
 //
-//  Also the only place destructive actions live. "Remove this device" revokes
-//  every region at once (that is the granularity `/api/me/devices/:id` offers)
-//  and drops the local keys, so it is behind a confirmation.
+//  Laid out to match Android's AccountScreen.kt: the avatar header, the quota
+//  card, the device list, the legal links, then sign out and — quieter than it,
+//  deliberately — account deletion.
+//
+//  Two things live here that Android keeps elsewhere or not at all:
+//
+//   - the connection details card, moved off Home (Android's Home has no such
+//     card). It is diagnostic rather than everyday, and worth keeping while the
+//     tunnel has not been verified on real hardware.
+//   - nothing else. If a control is not on Android's Account screen and not in
+//     that list, it does not belong here either.
 //
 import SwiftUI
+
+/// The server's cap, copied. It is NOT sent to the app, so this number goes
+/// stale — Android's copy said 5 until production moved to a uniform 3 in
+/// migration 011. If plans ever carry different caps, stop copying it: have
+/// `GET /api/me/devices` return the cap and read it from there.
+private let deviceCap = 3
 
 struct AccountView: View {
     let user: AuthUser
 
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var provisioning: ProvisioningStore
+    @EnvironmentObject private var tunnel: TunnelStore
+    @Environment(\.openURL) private var openURL
 
-    @State private var usage: UsageSummary?
     @State private var devices: [DeviceSummary] = []
+    @State private var isLoading = false
     @State private var loadError: String?
-    @State private var confirmRemove = false
+    @State private var showDelete = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Theme.stackSpacing) {
-                profileCard
-                usageCard
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                    .padding(.top, 14)
+
+                Card { QuotaMeter(usage: provisioning.usage) }
+                    .padding(.top, 22)
+
                 devicesCard
-                actions
+                    .padding(.top, 14)
+
+                if let config = provisioning.activeTunnelConfig {
+                    ConnectionDetailsCard(config: config)
+                        .padding(.top, 14)
+                }
+
+                legalCard
+                    .padding(.top, 14)
+
+                GlassButton(title: "Sign out", danger: true) {
+                    Task { await auth.signOut() }
+                }
+                .padding(.top, 20)
+
+                // Kept visible rather than hidden behind a menu — Apple wants
+                // deletion reachable in-app. It is deliberately quieter than
+                // Sign out: the more destructive of the two should not be the
+                // easier to hit.
+                Button {
+                    deleteError = nil
+                    showDelete = true
+                } label: {
+                    Text("Delete account")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.rose)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
+
+                Text("Powered by Avangard")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.faint)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 24)
+
+                Spacer().frame(height: Theme.bottomNavClearance)
             }
-            .padding()
+            .padding(.horizontal, 22)
         }
-        .screenBackground()
-        .navigationTitle("Account")
-        .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        /*
+          A scrim under the status bar. This screen scrolls edge-to-edge, so a
+          card heading slides up behind the clock and the Dynamic Island and
+          collides with them — white-on-dark against white-on-dark, with nothing
+          between. Android needs no equivalent: its status bar sits on an opaque
+          strip.
+
+          Deliberately a gradient to transparent rather than a solid bar: the
+          ambient wash is at its brightest along the top edge, and a solid strip
+          would cut the glow off in a straight line across the screen.
+        */
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [Theme.ground.opacity(0.92), Theme.ground.opacity(0)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 54)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+        }
         .task { await load() }
         .refreshable { await load() }
-        .confirmationDialog(
-            "Remove this device?",
-            isPresented: $confirmRemove,
-            titleVisibility: .visible
-        ) {
-            Button("Remove", role: .destructive) {
-                Task {
-                    await provisioning.revokeDevice()
-                    await load()
+        .sheet(isPresented: $showDelete) {
+            DeleteAccountSheet(
+                email: user.email,
+                busy: isDeleting,
+                error: deleteError,
+                onConfirm: { Task { await deleteAccount() } },
+                onCancel: {
+                    showDelete = false
+                    deleteError = nil
                 }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This revokes every region set up on this device and deletes its keys. You can set it up again afterwards.")
+            )
         }
     }
 
-    // MARK: - Cards
+    // MARK: - Header
 
-    private var profileCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(user.name)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.inkPrimary)
+    private var header: some View {
+        HStack(spacing: 13) {
+            Text(String(user.email.first.map(Character.init) ?? "A").uppercased())
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background(
+                    LinearGradient(
+                        colors: [Theme.indigo, Color(hex: 0x4338CA)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: user.email)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.inkSecondary)
-                if user.isAdmin {
-                    Label("Administrator", systemImage: "key.fill")
-                        .font(.caption)
-                        .foregroundStyle(Theme.inkMuted)
-                        .padding(.top, 4)
-                }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Text(memberLine)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.muted)
             }
+
+            Spacer()
         }
     }
 
-    @ViewBuilder
-    private var usageCard: some View {
-        Card {
-            if let usage {
-                QuotaMeter(usage: usage)
-            } else if let loadError {
-                Label(loadError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.statusCritical)
-            } else {
-                ProgressView().tint(Theme.inkPrimary)
-            }
+    /// With no device list loaded there is no count to state. "0 of 3" would be
+    /// inventing one, and 0 is exactly the number a user would act on.
+    private var memberLine: String {
+        if loadError != nil && devices.isEmpty {
+            return "Member · \(deviceCap) devices max"
         }
+        return "Member · \(devices.count) of \(deviceCap) devices"
     }
+
+    // MARK: - Devices
 
     private var devicesCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Devices")
+            VStack(alignment: .leading, spacing: 0) {
+                CardHead(title: "Devices", aside: devicesAside)
+                    .padding(.bottom, 6)
 
                 if devices.isEmpty {
-                    Text("No devices registered yet.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.inkSecondary)
+                    // "No devices yet." is a claim about the account. Only make
+                    // it when the list actually loaded — otherwise say what
+                    // really happened.
+                    Text(emptyDevicesMessage)
+                        .font(.system(size: 13))
+                        .foregroundStyle(loadError != nil && !isLoading ? Theme.amber : Theme.muted)
+                        .padding(.vertical, 8)
                 } else {
                     ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
                         if index > 0 {
-                            Divider().overlay(Theme.separator)
+                            Rectangle()
+                                .fill(Theme.stroke)
+                                .frame(height: 1)
                         }
                         deviceRow(device)
                     }
@@ -107,68 +196,200 @@ struct AccountView: View {
         }
     }
 
+    private var devicesAside: String {
+        if isLoading { return "…" }
+        if loadError != nil && devices.isEmpty { return "unavailable" }
+        return "\(devices.count) active"
+    }
+
+    private var emptyDevicesMessage: String {
+        if isLoading { return "Loading…" }
+        if let loadError { return loadError }
+        return "No devices yet."
+    }
+
     private func deviceRow(_ device: DeviceSummary) -> some View {
-        let isThisDevice = device.deviceId == DeviceIdentity.id
+        let isCurrent = device.deviceId == DeviceIdentity.id
 
-        return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: isThisDevice ? "iphone" : "desktopcomputer")
-                .foregroundStyle(isThisDevice ? Theme.brand : Theme.inkMuted)
-
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(device.deviceName)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.inkPrimary)
-                    if isThisDevice {
-                        Text("This device")
-                            .font(.caption2)
-                            .foregroundStyle(Theme.inkMuted)
+                HStack(spacing: 7) {
+                    if isCurrent {
+                        Circle()
+                            .fill(Theme.emeraldBright)
+                            .frame(width: 6, height: 6)
                     }
+                    Text(isCurrent ? "\(device.deviceName) · This device" : device.deviceName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.text)
                 }
-                Text(device.regions.isEmpty
-                     ? "No regions"
-                     : device.regions.joined(separator: ", ").uppercased())
-                    .font(.caption)
-                    .foregroundStyle(Theme.inkSecondary)
+                if !device.regions.isEmpty {
+                    Text(verbatim: device.regions.joined(separator: ", ").uppercased())
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .foregroundStyle(Theme.faint)
+                }
             }
 
             Spacer()
+
+            Button {
+                Task { await revoke(device) }
+            } label: {
+                Text("Remove")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.muted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 11)
+    }
+
+    // MARK: - Legal
+
+    /// In-app legal links. App Store Review wants a privacy policy reachable
+    /// from inside the app, not only from the store listing — this is that.
+    private var legalCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 0) {
+                CardHead(title: "Legal", aside: "opens in browser")
+                    .padding(.bottom, 4)
+
+                legalRow("Privacy Policy", url: LegalUrls.privacy)
+                Rectangle().fill(Theme.stroke).frame(height: 1)
+                legalRow("Terms of Service", url: LegalUrls.terms)
+            }
         }
     }
 
-    private var actions: some View {
-        VStack(spacing: 12) {
-            Button {
-                confirmRemove = true
-            } label: {
-                Text("Remove this device")
-                    .frame(maxWidth: .infinity, minHeight: 44)
+    private func legalRow(_ label: String, url: URL) -> some View {
+        Button {
+            openURL(url)
+        } label: {
+            HStack {
+                Text(label)
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Text(verbatim: "↗")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.faint)
             }
-            .foregroundStyle(Theme.statusCritical)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-
-            Button {
-                Task { await auth.signOut() }
-            } label: {
-                Text("Sign out")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .foregroundStyle(Theme.brand)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Loading
+    // MARK: - Actions
 
     private func load() async {
-        // Usage and devices are independent; a failure in one shouldn't blank
-        // the other, so they're fetched separately and reported together.
-        async let usageResult = try? await APIClient.shared.usage()
-        async let devicesResult = try? await APIClient.shared.devices()
+        isLoading = true
+        defer { isLoading = false }
 
-        let (fetchedUsage, fetchedDevices) = await (usageResult, devicesResult)
-        usage = fetchedUsage
-        devices = fetchedDevices ?? []
-        loadError = fetchedUsage == nil ? "Couldn't load your usage." : nil
+        // Usage and devices are independent; a failure in one shouldn't blank
+        // the other, so they're fetched separately and reported separately.
+        async let usageRefresh: Void = provisioning.refreshUsage()
+        async let fetchedDevices = try? await APIClient.shared.devices()
+
+        let (_, list) = await (usageRefresh, fetchedDevices)
+        if let list {
+            devices = list
+            loadError = nil
+        } else {
+            loadError = "Couldn't load your devices."
+        }
+    }
+
+    /// Revoking THIS device also has to drop the local keys, which only
+    /// ProvisioningStore can do. Revoking another one is a plain API call — its
+    /// keys live on that device, not here.
+    private func revoke(_ device: DeviceSummary) async {
+        if device.deviceId == DeviceIdentity.id {
+            tunnel.disconnect()
+            await provisioning.revokeDevice()
+        } else {
+            try? await APIClient.shared.revokeDevice(device.deviceId)
+        }
+        await load()
+    }
+
+    private func deleteAccount() async {
+        isDeleting = true
+        defer { isDeleting = false }
+
+        // The server takes the peers off the interface before it replies, so a
+        // request travelling through our own tunnel can lose its return path.
+        tunnel.disconnect()
+
+        if let message = await auth.deleteAccount() {
+            deleteError = message
+            return
+        }
+        // On success the auth state moved to signedOut and this view is gone;
+        // dismissing the sheet is only tidiness for the frame in between.
+        showDelete = false
+    }
+}
+
+// MARK: - Connection details
+
+/// What the tunnel will actually use. Kept visible because a wrong route or a
+/// missing IPv6 address is invisible until traffic silently breaks.
+struct ConnectionDetailsCard: View {
+    let config: TunnelConfig
+    @State private var expanded = false
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                CardHead(title: "Connection", aside: "this device")
+
+                detail("Address", config.addresses.joined(separator: ", "))
+                detail("Endpoint", config.endpoint)
+                detail("Routes", config.allowedIps.joined(separator: ", "))
+                detail("DNS", config.dns.joined(separator: ", "))
+
+                if !config.allowedIps.contains(where: { $0.contains(":") }) {
+                    Label("IPv4 only — this region has no IPv6 assigned", systemImage: "info.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.faint)
+                }
+
+                DisclosureGroup("Show wg-quick config", isExpanded: $expanded) {
+                    Text(verbatim: redacted)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(.top, 8)
+                }
+                .font(.system(size: 12))
+                .tint(Theme.indigoBright)
+                .foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private func detail(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.muted)
+                .frame(width: 68, alignment: .leading)
+            Text(verbatim: value)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.text)
+        }
+    }
+
+    /// Secrets are masked. This view exists to make the config inspectable,
+    /// not to export credentials — there is no path that reveals the keys.
+    private var redacted: String {
+        config.wgQuickConfig
+            .replacingOccurrences(of: config.privateKey, with: "<private key — stays in Keychain>")
+            .replacingOccurrences(of: config.presharedKey, with: "<preshared key>")
     }
 }

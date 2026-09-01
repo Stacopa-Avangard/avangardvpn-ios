@@ -12,10 +12,31 @@
 import Foundation
 import NetworkExtension
 
+/// Live per-second transfer rates, as Android's `Throughput` carries them.
+struct Throughput: Equatable {
+    var downBytesPerSecond: Int64 = 0
+    var upBytesPerSecond: Int64 = 0
+
+    static let zero = Throughput()
+}
+
 @MainActor
 final class TunnelStore: ObservableObject {
-    @Published private(set) var status: TunnelStatus = .invalid
+    @Published private(set) var status: TunnelStatus = .invalid {
+        didSet {
+            guard status != oldValue else { return }
+            statusDidChange()
+        }
+    }
     @Published var errorMessage: String?
+
+    /// Live ↓/↑ rates while the tunnel is up, zero otherwise.
+    @Published private(set) var throughput: Throughput = .zero
+
+    /// When the current session came up, for the session clock. Survives
+    /// `.reasserting` — the network moved, the session did not end — and is
+    /// cleared on any real teardown.
+    @Published private(set) var connectedSince: Date?
 
     /// True across the save/permission round trip, which is the one stretch
     /// where nothing has happened yet and `status` is still the old value.
@@ -33,6 +54,7 @@ final class TunnelStore: ObservableObject {
     private let store: VPNConfigurationStore
     private var configuration: VPNConfiguration?
     private var observation: Task<Void, Never>?
+    private var metering: Task<Void, Never>?
 
     /*
       Two initialisers rather than one with a default argument.
@@ -62,6 +84,7 @@ final class TunnelStore: ObservableObject {
 
     deinit {
         observation?.cancel()
+        metering?.cancel()
     }
 
     // MARK: - Lifecycle
@@ -194,6 +217,103 @@ final class TunnelStore: ObservableObject {
     private func mine(among configurations: [VPNConfiguration]) -> VPNConfiguration? {
         configurations.first { $0.providerBundleIdentifier == Self.providerBundleIdentifier }
             ?? configurations.first
+    }
+
+    // MARK: - Metering
+
+    /// Drives the session clock and the throughput ticker off one place, so
+    /// every path that moves `status` — a tap here, or the user disconnecting
+    /// from Settings — gets the same treatment.
+    private func statusDidChange() {
+        switch status {
+        case .connected:
+            if connectedSince == nil { connectedSince = Date() }
+            startMetering()
+        case .reasserting:
+            // Still the same session; the rate is meaningless while it
+            // re-establishes, so the meter stops but the clock keeps running.
+            stopMetering()
+        default:
+            connectedSince = nil
+            stopMetering()
+        }
+    }
+
+    /// Polls the extension once a second and reports the delta.
+    ///
+    /// The first reading only seeds the baseline — emitting on it would
+    /// report the whole session's traffic as one second of it, which is the
+    /// spike Android's ticker documents avoiding. A counter that goes
+    /// backwards (the backend restarted under a reconnect) clamps to zero
+    /// rather than reporting a negative rate.
+    private func startMetering() {
+        guard metering == nil else { return }
+        metering = Task { [weak self] in
+            var previous: (rx: Int64, tx: Int64)?
+
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled, let self else { return }
+
+                guard
+                    self.status == .connected,
+                    let report = await self.configuration?.runtimeConfiguration(),
+                    let counters = Self.counters(in: report)
+                else {
+                    // Lost the channel: drop the baseline so the next good
+                    // reading seeds a fresh one instead of differencing
+                    // against a stale counter across the gap.
+                    previous = nil
+                    self.throughput = .zero
+                    continue
+                }
+
+                if let previous {
+                    self.throughput = Throughput(
+                        downBytesPerSecond: max(0, counters.rx - previous.rx),
+                        upBytesPerSecond: max(0, counters.tx - previous.tx)
+                    )
+                }
+                previous = counters
+            }
+        }
+    }
+
+    private func stopMetering() {
+        metering?.cancel()
+        metering = nil
+        throughput = .zero
+    }
+
+    /// Sum the transfer counters out of wireguard-go's UAPI report.
+    ///
+    /// The format is one `key=value` per line, with the peer's counters
+    /// following its `public_key`. Summed across peers rather than taken from
+    /// the first: there is exactly one peer today, and a sum stays correct if
+    /// that ever stops being true.
+    ///
+    /// `rx_bytes` is what came back from the peer — the user's download.
+    static func counters(in uapi: String) -> (rx: Int64, tx: Int64)? {
+        var rx: Int64 = 0
+        var tx: Int64 = 0
+        var sawCounter = false
+
+        for line in uapi.split(separator: "\n") {
+            let parts = line.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2, let value = Int64(parts[1]) else { continue }
+            switch parts[0] {
+            case "rx_bytes":
+                rx += value
+                sawCounter = true
+            case "tx_bytes":
+                tx += value
+                sawCounter = true
+            default:
+                break
+            }
+        }
+
+        return sawCounter ? (rx, tx) : nil
     }
 
     // MARK: - Presentation

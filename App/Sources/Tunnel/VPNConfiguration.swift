@@ -68,6 +68,20 @@ protocol VPNConfiguration: AnyObject {
 
     func startTunnel() throws
     func stopTunnel()
+
+    /// The tunnel's own runtime counters, as the extension reports them — the
+    /// same text `wg show` would print. This is the ONLY channel the app has
+    /// into the running extension (`handleAppMessage` on the other side).
+    ///
+    /// Nil whenever there is nothing to ask: the tunnel is not up, the
+    /// connection is not a provider session, or the message was refused.
+    func runtimeConfiguration() async -> String?
+}
+
+extension VPNConfiguration {
+    /// Defaulted so the test fakes, which have no provider session and cannot
+    /// have one, keep conforming without having to pretend to answer.
+    func runtimeConfiguration() async -> String? { nil }
 }
 
 @MainActor
@@ -157,6 +171,30 @@ final class SystemVPNConfiguration: VPNConfiguration {
 
     func stopTunnel() {
         manager.connection.stopVPNTunnel()
+    }
+
+    func runtimeConfiguration() async -> String? {
+        /*
+          `sendProviderMessage` throws rather than returning an error when the
+          session is not running, and the tunnel goes down at moments the app
+          does not choose — so a poll landing on a torn-down tunnel is normal
+          traffic, not a fault. Every failure here is a nil, never a throw:
+          the caller's only sensible response is to show no rate, which is
+          what a nil already means.
+        */
+        guard let session = manager.connection as? NETunnelProviderSession else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            do {
+                // The extension ignores the body and always answers with the
+                // runtime configuration; an empty message keeps it that way.
+                try session.sendProviderMessage(Data()) { response in
+                    continuation.resume(returning: response.flatMap { String(data: $0, encoding: .utf8) })
+                }
+            } catch {
+                continuation.resume(returning: nil)
+            }
+        }
     }
 }
 

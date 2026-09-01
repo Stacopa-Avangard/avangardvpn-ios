@@ -61,6 +61,29 @@ actor APIClient {
         _ = try await perform(request)
     }
 
+    /// Sign in with a code instead of the emailed link.
+    ///
+    /// Exists for the App Store reviewer, who has no way into our mailbox —
+    /// the same reason Android added it for Play (`POST /auth/demo-login`
+    /// there too). It mints nothing: the server flips this login session to
+    /// verified and the ordinary poll claims the tokens, so there is one token
+    /// path rather than two.
+    ///
+    /// A wrong code, an unknown address, and a deployment with no demo account
+    /// configured all fail identically and deliberately — the response says
+    /// nothing about which it was.
+    func demoLogin(email: String, code: String, loginSessionId: String) async throws {
+        var request = URLRequest(url: AppConfig.baseURL.appendingPathComponent("auth/demo-login"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode([
+            "email": email,
+            "code": code,
+            "loginSessionId": loginSessionId,
+        ])
+        _ = try await perform(request)
+    }
+
     /// Has the emailed link been clicked yet? Returns `.pending` until it is,
     /// then `.verified` once — the claim is single-use, so a second poll after
     /// success reports `.expired`.
@@ -132,6 +155,23 @@ actor APIClient {
     func revokeDevice(_ deviceId: String) async throws {
         let _: EmptyResponse = try await authorized(
             path: "api/me/devices/\(deviceId)", method: "DELETE", body: NoBody?.none
+        )
+    }
+
+    /// Delete the signed-in account. Irreversible and immediate: the server
+    /// takes this device's peers off the interface, drops the rows, and every
+    /// token issued to the account dies with it.
+    ///
+    /// ⚠️ Disconnect the tunnel before calling this. The server removes the
+    /// peers *before* it replies, so a request travelling through that tunnel
+    /// can lose its own return path.
+    ///
+    /// A 404 means the account is already gone — the outcome the caller asked
+    /// for — and is left for the caller to swallow, the same shape
+    /// `revokeDevice` uses. A 409 (`last_admin`) is a real refusal.
+    func deleteAccount() async throws {
+        let _: EmptyResponse = try await authorized(
+            path: "api/me", method: "DELETE", body: NoBody?.none
         )
     }
 
