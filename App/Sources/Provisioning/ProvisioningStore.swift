@@ -17,6 +17,11 @@ final class ProvisioningStore: ObservableObject {
     @Published private(set) var provisionedRegions: Set<String> = []
     /// The region the user last provisioned — what the tunnel connects to.
     @Published private(set) var activeRegion: String?
+
+    /// Bandwidth against the monthly quota. Owned here rather than by a screen
+    /// because both tabs render it — Home as a near-quota banner, Account as
+    /// the meter — and two independent fetches would let them disagree.
+    @Published private(set) var usage: UsageSummary?
     @Published var errorMessage: String?
 
     private let activeRegionKey = "provisioning.activeRegion"
@@ -50,6 +55,16 @@ final class ProvisioningStore: ObservableObject {
             errorMessage = nil
         } catch {
             errorMessage = message(for: error)
+        }
+    }
+
+    /// Best-effort: a usage fetch that fails leaves the previous figure up
+    /// rather than blanking it, exactly as Android's `refreshUsage` does. A
+    /// stale number is more useful than no number, and the period label says
+    /// which month it belongs to.
+    func refreshUsage() async {
+        if let fetched = try? await APIClient.shared.usage() {
+            usage = fetched
         }
     }
 

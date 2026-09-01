@@ -28,6 +28,15 @@ final class AuthStore: ObservableObject {
 
     private var pollTask: Task<Void, Never>?
 
+    /// The login session the current `.awaitingLink` is polling. Signing in by
+    /// code has to reuse it — the code verifies THAT session, and the poll
+    /// already running is what claims the tokens.
+    private var pendingLoginSessionId: String?
+
+    /// Set while a code is being checked, so the button can show a spinner
+    /// without the email form's `isSubmitting` doing double duty.
+    @Published private(set) var isCheckingCode = false
+
     // MARK: - Lifecycle
 
     /// Restore a session at launch. A stored refresh token is not proof of a
@@ -91,6 +100,7 @@ final class AuthStore: ObservableObject {
         // backend answers identically either way to prevent account probing.
         // So we always move to "check your email" and let the poll time out.
         state = .awaitingLink(email: trimmed)
+        pendingLoginSessionId = loginSessionId
         startPolling(loginSessionId: loginSessionId)
     }
 
@@ -99,8 +109,55 @@ final class AuthStore: ObservableObject {
     func cancelPendingLogin() {
         pollTask?.cancel()
         pollTask = nil
+        pendingLoginSessionId = nil
         errorMessage = nil
         state = .signedOut
+    }
+
+    /// Sign in with a code instead of waiting for the emailed link.
+    ///
+    /// Only reachable from the "check your email" state, because the code
+    /// verifies the login session that state is already polling. On success
+    /// the backend has marked that session verified and this claims it
+    /// immediately rather than waiting out the poll interval — the reviewer
+    /// should not sit watching a spinner for three seconds after a correct
+    /// code.
+    func signInWithCode(_ code: String) async {
+        guard case let .awaitingLink(email) = state, let sessionId = pendingLoginSessionId else {
+            return
+        }
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        errorMessage = nil
+        isCheckingCode = true
+        defer { isCheckingCode = false }
+
+        do {
+            try await APIClient.shared.demoLogin(
+                email: email, code: trimmed, loginSessionId: sessionId
+            )
+        } catch {
+            // Deliberately one message for every failure. The backend refuses
+            // to distinguish a wrong code from an unknown address from a
+            // deployment with no demo account, and neither should we.
+            errorMessage = "That code was not accepted."
+            return
+        }
+
+        guard
+            let response = try? await APIClient.shared.poll(loginSessionId: sessionId),
+            response.status == .verified
+        else {
+            // The code was accepted but the claim did not land. The poll is
+            // still running and will pick it up; say nothing rather than
+            // showing an error over a sign-in that is about to succeed.
+            return
+        }
+
+        pollTask?.cancel()
+        pollTask = nil
+        completeSignIn(response)
     }
 
     func signOut() async {
@@ -109,6 +166,32 @@ final class AuthStore: ObservableObject {
         await APIClient.shared.logout()
         TokenStore.clear()
         state = .signedOut
+    }
+
+    /// Delete the account and sign out. Required by App Store Review 5.1.1(v):
+    /// an app that lets people create an account must let them delete it from
+    /// inside the app, not only by writing to support.
+    ///
+    /// Returns the message to show on failure, nil on success. The caller must
+    /// take the tunnel down first — see `APIClient.deleteAccount`.
+    func deleteAccount() async -> String? {
+        do {
+            try await APIClient.shared.deleteAccount()
+        } catch APIError.http(status: 404, code: _) {
+            // Already gone; that is the outcome that was asked for.
+        } catch let APIError.http(status: 409, code: code) where code == "last_admin" {
+            return "This is the last administrator account, so it cannot be deleted."
+        } catch {
+            return (error as? LocalizedError)?.errorDescription
+                ?? "Couldn't delete your account. Please try again."
+        }
+
+        pollTask?.cancel()
+        pollTask = nil
+        pendingLoginSessionId = nil
+        TokenStore.clear()
+        state = .signedOut
+        return nil
     }
 
     // MARK: - Polling
@@ -171,11 +254,13 @@ final class AuthStore: ObservableObject {
             failPending("Couldn't save your session to the Keychain.")
             return
         }
+        pendingLoginSessionId = nil
         errorMessage = nil
         state = .signedIn(user)
     }
 
     private func failPending(_ message: String) {
+        pendingLoginSessionId = nil
         errorMessage = message
         state = .signedOut
     }

@@ -1,141 +1,111 @@
 //
 //  QuotaMeter.swift — bandwidth used against the monthly limit.
 //
-//  A single ratio against a limit is a meter, not a chart: no axes, no legend,
-//  one value. The number leads and the bar supports it.
+//  Ported from Android's `QuotaBar`: a gradient fill on a faint track, the used
+//  figure and the cap underneath in monospace so the two line up, and a rose
+//  line when the account is suspended.
 //
-//  The fill carries severity and the unfilled track is a lighter step of the
-//  SAME ramp, so the state reads across the whole bar rather than only in the
-//  filled part. Severity is never colour-alone — every state ships an icon and
-//  a worded label beside it.
+//  The fill goes amber once the account is near or over its limit, which is the
+//  same threshold the Home banner uses (80%). Severity is never colour-alone —
+//  the figures under the bar and the accessibility value both say it in words.
 //
 import SwiftUI
 
 struct QuotaMeter: View {
-    let usage: UsageSummary
+    let usage: UsageSummary?
 
-    private enum Severity {
-        case normal, approaching, over, suspended
-
-        var tint: Color {
-            switch self {
-            case .normal: return Theme.brand
-            case .approaching: return Theme.statusWarning
-            case .over, .suspended: return Theme.statusCritical
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .normal: return "checkmark.circle.fill"
-            case .approaching: return "exclamationmark.triangle.fill"
-            case .over: return "exclamationmark.octagon.fill"
-            case .suspended: return "pause.circle.fill"
-            }
-        }
-
-        var label: String {
-            switch self {
-            case .normal: return "Within quota"
-            case .approaching: return "Approaching quota"
-            case .over: return "Over quota"
-            case .suspended: return "Suspended — quota exceeded"
-            }
-        }
-    }
-
-    private var severity: Severity {
-        if usage.suspended { return .suspended }
-        guard !usage.unlimited else { return .normal }
-        if usage.fraction >= 1 { return .over }
-        if usage.fraction >= 0.8 { return .approaching }
-        return .normal
+    private var nearLimit: Bool {
+        guard let usage else { return false }
+        return usage.suspended || usage.fraction >= 0.8
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+        VStack(alignment: .leading, spacing: 0) {
+            CardHead(title: "Data this month", aside: "resets monthly")
+                .padding(.bottom, 12)
 
-            if usage.unlimited {
-                Text("No monthly limit on this account.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.inkSecondary)
+            if let usage {
+                if usage.unlimited {
+                    Text("Unlimited")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.text)
+                } else {
+                    bar(usage)
+                    figures(usage)
+                    if usage.suspended {
+                        Text("Paused — monthly limit reached.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.rose)
+                            .padding(.top, 6)
+                    }
+                }
             } else {
-                track
-                footer
+                Text(verbatim: "—")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
             }
-
-            statusLine
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Data used")
-                .font(.footnote)
-                .foregroundStyle(Theme.inkSecondary)
-            // The value leads; proportional figures, not tabular — this is a
-            // standalone number, not a column that has to line up.
-            Text(verbatim: ByteFormat.string(usage.usedBytes))
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Theme.inkPrimary)
-        }
-    }
-
-    private var track: some View {
+    private func bar(_ usage: UsageSummary) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                // Unfilled track: a lighter step of the fill's own ramp.
+                Capsule().fill(Color.white.opacity(0.07))
                 Capsule()
-                    .fill(severity.tint.opacity(0.22))
-                Capsule()
-                    .fill(severity.tint)
-                    .frame(width: max(0, min(1, usage.fraction)) * geo.size.width)
+                    .fill(
+                        LinearGradient(
+                            colors: nearLimit
+                                ? [Theme.amber, Theme.amberBright]
+                                : [Theme.indigo, Theme.indigoBright],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: min(1, max(0, usage.fraction)) * geo.size.width)
             }
         }
-        .frame(height: 8)
+        .frame(height: 9)
         .accessibilityElement()
-        .accessibilityLabel("Data used")
-        .accessibilityValue(
-            "\(ByteFormat.string(usage.usedBytes)) of \(ByteFormat.string(usage.quotaBytes)). \(severity.label)."
-        )
+        .accessibilityLabel("Data used this month")
+        .accessibilityValue(accessibilityValue(usage))
     }
 
-    private var footer: some View {
+    private func figures(_ usage: UsageSummary) -> some View {
         HStack {
-            Text(verbatim: "\(Int((usage.fraction * 100).rounded()))% of \(ByteFormat.string(usage.quotaBytes))")
-                .font(.caption)
-                .foregroundStyle(Theme.inkSecondary)
+            Text(verbatim: "\(ByteFormat.string(usage.usedBytes)) used")
+                .font(.system(size: 12.5, design: .monospaced))
+                .foregroundStyle(Theme.text)
             Spacer()
-            Text(verbatim: usage.period)
-                .font(.caption)
-                .foregroundStyle(Theme.inkMuted)
+            Text(verbatim: ByteFormat.string(usage.quotaBytes))
+                .font(.system(size: 12.5, design: .monospaced))
+                .foregroundStyle(Theme.muted)
         }
+        .padding(.top, 10)
     }
 
-    private var statusLine: some View {
-        Label {
-            Text(severity.label)
-                .font(.caption)
-                // Text keeps ink tokens; the icon beside it carries the state.
-                .foregroundStyle(Theme.inkSecondary)
-        } icon: {
-            Image(systemName: severity.icon)
-                .foregroundStyle(severity.tint)
-        }
-        .labelStyle(.titleAndIcon)
+    private func accessibilityValue(_ usage: UsageSummary) -> String {
+        let base = "\(ByteFormat.string(usage.usedBytes)) of \(ByteFormat.string(usage.quotaBytes))"
+        if usage.suspended { return "\(base). Suspended, monthly limit reached." }
+        if usage.fraction >= 1 { return "\(base). Over quota." }
+        if usage.fraction >= 0.8 { return "\(base). Approaching quota." }
+        return "\(base). Within quota."
     }
 }
 
-enum ByteFormat {
-    private static let formatter: ByteCountFormatter = {
-        let f = ByteCountFormatter()
-        f.allowedUnits = [.useKB, .useMB, .useGB]
-        f.countStyle = .binary
-        return f
-    }()
+/// A card's title with a quiet aside on the right — Android's `CardHead`.
+struct CardHead: View {
+    let title: String
+    let aside: String
 
-    static func string(_ bytes: Int64) -> String {
-        formatter.string(fromByteCount: max(0, bytes))
+    var body: some View {
+        HStack(alignment: .bottom) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.text)
+            Spacer()
+            Text(aside)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.muted)
+        }
     }
 }
