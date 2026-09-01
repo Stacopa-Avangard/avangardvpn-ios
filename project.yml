@@ -99,11 +99,29 @@ targets:
         # still held to full ATS requirements.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+    # ⚠️ The app carries the SAME networkextension entitlement as the extension
+    # it embeds, and that is not a copy-paste slip. NETunnelProviderManager —
+    # the API the app uses to save the VPN configuration and start the tunnel —
+    # is gated on `packet-tunnel-provider` on the CALLING side too. Without it
+    # `saveToPreferences` fails and the tunnel can never be started, even
+    # though the extension itself is entitled correctly.
+    #
+    # It is specifically NOT `com.apple.developer.networking.vpn.api`
+    # (`allow-vpn`, "Personal VPN"). That one is for NEVPNManager driving the
+    # built-in IKEv2/IPsec stack, which this app does not use. Verified against
+    # the reference implementation rather than reasoned about — upstream
+    # wireguard-apple's Sources/WireGuardApp/UI/iOS/WireGuard.entitlements
+    # carries networkextension + app-groups and no vpn.api key at all.
+    #
+    # Both are paid-only: a free Personal Team cannot sign either, which is why
+    # AvangardVPNDeviceTest below has no entitlements block.
     entitlements:
       path: App/AvangardVPN.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.avangard.vpn
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn
