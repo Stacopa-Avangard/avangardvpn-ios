@@ -2,7 +2,7 @@
 //  AppConfig.swift — compile-time constants shared across the app.
 //
 //  The backend is the same one the Android app talks to
-//  (fixidn/wireguard-dashboard). No per-build configuration: there is exactly
+//  (Stacopa-Avangard/avangardvpn-server). No per-build configuration: there is exactly
 //  one production deployment, so the base URL is a constant rather than a
 //  scheme/xcconfig knob.
 //

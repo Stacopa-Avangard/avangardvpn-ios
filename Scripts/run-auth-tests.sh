@@ -8,7 +8,7 @@
 # the link. The test then claims the session exactly as the app would.
 #
 # Usage:
-#   # terminal 1 — in fixidn/wireguard-dashboard
+#   # terminal 1 — in Stacopa-Avangard/avangardvpn-server
 #   cd backend && pnpm dev 2>&1 | tee /tmp/backend.log
 #
 #   # terminal 2 — here
