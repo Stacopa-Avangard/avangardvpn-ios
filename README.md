@@ -30,11 +30,7 @@ Three targets in one Xcode project (defined by [`project.yml`](project.yml), Xco
   else was built so it could land without waiting on it.
 - App IDs + capabilities: **Network Extensions** (packet-tunnel-provider) + **App Groups** on both bundle IDs.
 - Signing via `fastlane match` (for CI) or Xcode automatic signing (local).
-- ⚠️ **There is no app icon.** This project has no asset catalog at all, and App
-  Store Connect rejects a build without a 1024×1024 icon. The Android sources to
-  work from are `app/src/main/res/drawable-nodpi/splash_shield.png` (512×512,
-  the white shield) on the `#0D6EFD` launcher background — both need
-  regenerating at 1024, not upscaling.
+- App icon: present, see [Icon](#icon).
 
 Everything through P2 (and the UI work in P4) needs none of this — it builds and
 tests on the Simulator unsigned.
@@ -126,6 +122,35 @@ it at a backend on your Mac instead, add `AVANGARD_API_BASE=http://<mac-lan-ip>:
 to the scheme's environment variables (Product → Scheme → Edit Scheme → Run →
 Arguments) with the phone on the same Wi-Fi. That variable is DEBUG-only and
 compiled out of Release builds.
+
+## Icon
+
+`App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`, generated
+by [`Tools/render-app-icon.swift`](Tools/render-app-icon.swift):
+
+```bash
+swift Tools/render-app-icon.swift \
+  App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+```
+
+It draws the brand kit's "A" monogram — the exact `pathData` from Android's
+`ui/src/main/res/drawable/ic_launcher_foreground.xml`, in its native 250×250
+viewport — on Android's launcher gradient (`#312E81` → `#0D6EFD`, top-left to
+bottom-right). Nothing is upscaled: the glyph is vector all the way to the
+1024 raster, which is why the script exists instead of a checked-in export from
+a design tool.
+
+Two things it does that are not obvious, and that a hand-made replacement would
+get wrong:
+
+- **No alpha channel** (`noneSkipLast`). App Store Connect rejects an app icon
+  that carries one.
+- **The glyph is 62% of the canvas, where Android's reads as ~78%.** Android's
+  is a 108dp adaptive icon of which only 72dp is ever visible, so the same
+  optical weight needs a smaller fraction on iOS, where the whole 1024 shows.
+
+The shield is a different mark and is not the app icon on either platform: it
+is the splash and the sign-in screen (`SplashView`, `ShieldMark`).
 
 ## Design
 
