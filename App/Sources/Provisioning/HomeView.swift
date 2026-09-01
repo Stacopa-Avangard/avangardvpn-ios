@@ -4,18 +4,25 @@
 //  One job: show whether the tunnel is up and let the user change that. The
 //  connect control is the hero; everything else is supporting context.
 //
-//  The control is disabled and says why: the tunnel extension arrives in P3,
-//  and it cannot run in the Simulator at all. Showing a live-looking button
-//  that silently does nothing would be worse than showing an honest one.
+//  The control is live as of P4. It is still disabled when there is nothing to
+//  connect to — no region provisioned means no config to hand the extension —
+//  and it says which of the two it is rather than just going grey.
 //
 import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var provisioning: ProvisioningStore
+    @EnvironmentObject private var tunnel: TunnelStore
     @State private var showRegionPicker = false
 
     private var activeRegion: Region? {
         provisioning.regions.first { $0.regionCode == provisioning.activeRegion }
+    }
+
+    /// Both halves have to be present to connect: a region the user picked, and
+    /// credentials this device actually holds for it.
+    private var connectable: TunnelConfig? {
+        provisioning.activeTunnelConfig
     }
 
     var body: some View {
@@ -26,7 +33,7 @@ struct HomeView: View {
                 if let config = provisioning.activeTunnelConfig {
                     ConnectionDetailsCard(config: config)
                 }
-                if let message = provisioning.errorMessage {
+                if let message = tunnel.errorMessage ?? provisioning.errorMessage {
                     Label(message, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(Theme.statusCritical)
@@ -38,6 +45,7 @@ struct HomeView: View {
         .screenBackground()
         .navigationTitle("Avangard VPN")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await tunnel.start() }
         .sheet(isPresented: $showRegionPicker) {
             RegionPickerView()
                 .environmentObject(provisioning)
@@ -53,36 +61,84 @@ struct HomeView: View {
                     .fill(Theme.surface)
                     .frame(width: 176, height: 176)
                 Circle()
-                    .strokeBorder(Theme.separator, lineWidth: 1)
+                    .strokeBorder(dialColor.opacity(0.9), lineWidth: 2)
                     .frame(width: 176, height: 176)
                 Image(systemName: "power")
                     .font(.system(size: 56, weight: .light))
-                    .foregroundStyle(Theme.inkMuted)
+                    .foregroundStyle(dialColor)
             }
+            // The dial is the only thing on screen that moves, so the state
+            // change reads even when the label is not being watched.
+            .animation(.easeInOut(duration: 0.2), value: tunnel.status)
 
             VStack(spacing: 4) {
-                Text("Not connected")
+                Text(tunnel.status.title)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Theme.inkPrimary)
-                Text(provisioning.activeRegion == nil
-                     ? "Choose a region to get started"
-                     : "Tunnel support arrives in P3")
+                Text(subtitle)
                     .font(.footnote)
                     .foregroundStyle(Theme.inkSecondary)
+                    .multilineTextAlignment(.center)
             }
 
-            Button {
-                // P3 wires this to the packet-tunnel extension.
-            } label: {
-                Text("Connect")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity, minHeight: 50)
+            Button(action: toggle) {
+                Group {
+                    if tunnel.isPreparing || tunnel.status == .disconnecting {
+                        ProgressView().tint(Theme.inkPrimary)
+                    } else {
+                        Text(tunnel.status.offersDisconnect ? "Disconnect" : "Connect")
+                            .fontWeight(.semibold)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 50)
             }
-            .background(Theme.brand.opacity(0.35), in: Capsule())
-            .foregroundStyle(Theme.inkMuted)
-            .disabled(true)
+            .background(canToggle ? Theme.brand : Theme.brand.opacity(0.35), in: Capsule())
+            .foregroundStyle(canToggle ? Theme.inkPrimary : Theme.inkMuted)
+            .disabled(!canToggle)
         }
         .padding(.top, 8)
+    }
+
+    private var dialColor: Color {
+        switch tunnel.status {
+        case .connected: return Theme.statusGood
+        // Reconnecting is not a healthy green: traffic is not flowing while it
+        // lasts, and a user watching the dial should see that something is off.
+        case .connecting, .reasserting: return Theme.statusWarning
+        case .disconnecting: return Theme.inkSecondary
+        case .disconnected, .invalid: return Theme.inkMuted
+        }
+    }
+
+    private var subtitle: String {
+        if provisioning.activeRegion == nil {
+            return "Choose a region to get started"
+        }
+        if connectable == nil {
+            return "This region is not set up on this device yet"
+        }
+        switch tunnel.status {
+        case .connected, .reasserting:
+            return activeRegion.map { "Routing through \($0.displayName)" } ?? "Tunnel up"
+        default:
+            return activeRegion.map { "Ready to connect to \($0.displayName)" } ?? "Ready to connect"
+        }
+    }
+
+    /// Disabled while a request is in flight, and while the system is tearing
+    /// the tunnel down — a second tap there does nothing but look broken.
+    private var canToggle: Bool {
+        connectable != nil && !tunnel.isPreparing && tunnel.status != .disconnecting
+    }
+
+    private func toggle() {
+        if tunnel.status.offersDisconnect {
+            tunnel.disconnect()
+            return
+        }
+        guard let config = connectable else { return }
+        let name = activeRegion?.displayName ?? provisioning.activeRegion ?? "VPN"
+        Task { await tunnel.connect(to: config, regionName: name) }
     }
 
     // MARK: - Region

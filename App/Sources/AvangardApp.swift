@@ -2,7 +2,7 @@
 //  AvangardApp.swift — app entry point (SwiftUI lifecycle).
 //
 //  Routes between the sign-in flow and the signed-in shell. The tunnel itself
-//  (P3) hangs off the Home tab.
+//  hangs off the Home tab.
 //
 import SwiftUI
 
@@ -48,6 +48,13 @@ struct SignedInShell: View {
     let user: AuthUser
 
     @StateObject private var provisioning = ProvisioningStore()
+
+    /// Owned at the shell for the same reason, plus one of its own: a store
+    /// recreated whenever HomeView appears would re-read the system
+    /// configuration each time and flash "Not connected" over a tunnel that is
+    /// already up.
+    @StateObject private var tunnel = TunnelStore()
+
     @State private var tab: Tab = .initial
 
     enum Tab: Hashable {
@@ -81,6 +88,7 @@ struct SignedInShell: View {
             .tag(Tab.account)
         }
         .environmentObject(provisioning)
+        .environmentObject(tunnel)
         .task { await provisioning.loadRegions() }
     }
 }

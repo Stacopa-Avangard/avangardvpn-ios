@@ -1,8 +1,14 @@
 name: Build iOS (unsigned)
 
-# Compile-check + offline unit tests on a macOS runner. Everything here builds
-# for the iOS Simulator without an Apple Developer account. Device builds /
-# TestFlight (signed) come later once signing (fastlane match) is set up.
+# Compile-check + offline unit tests on a macOS runner, with no Apple Developer
+# account: everything is built with CODE_SIGNING_ALLOWED=NO, so entitlements are
+# never validated. Signed device builds / TestFlight come later, once the
+# Developer Program enrolment clears and signing (fastlane match) is set up.
+#
+# ⚠️ NOT all Simulator — P3 changed that. The app and its tunnel extension build
+# for `generic/platform=iOS` because a packet-tunnel extension cannot link for
+# the Simulator at all (upstream's Makefile has no iphonesimulator case). Only
+# the test host builds and runs on a Simulator; see project.yml.
 
 on:
   push:
