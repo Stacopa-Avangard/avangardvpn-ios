@@ -35,8 +35,9 @@ Three upload requirements are already met and needed **none** of the above —
 app icon (see [Icon](#icon)), privacy manifest, and the export-compliance
 declaration (both under
 [Privacy manifest and export compliance](#privacy-manifest-and-export-compliance)).
-That last one leaves a **filing** open, which is paperwork rather than code and
-can start today.
+The only export step left before a release is App Store Connect's own
+questionnaire; the BIS filing that section describes looks backwards and is not
+owed until the February after the app has actually shipped.
 
 Everything through P2 (and the UI work in P4) needs none of this — it builds and
 tests on the Simulator unsigned.
@@ -206,14 +207,24 @@ HTTPS through `URLSession`. It does not fit one that embeds wireguard-go's own
 ChaCha20-Poly1305, Curve25519 and BLAKE2s. Nor do the others — authentication,
 DRM, medical. A VPN is the textbook non-exempt case.
 
-⚠️ **The declaration opens an obligation rather than closing one.** Before a
-TestFlight build can reach a tester, someone has to file the annual
-self-classification report for **ECCN 5D002** under License Exception ENC
-**§740.17(b)(1)** with BIS and the NSA ENC coordinator, then answer App Store
-Connect's export questionnaire (the separate France question included). US
-export rules apply because the App Store distributes from the US — an Indonesian
-developer account does not change that. Once an ERN/CCATS code exists, adding it
-as `ITSEncryptionExportComplianceCode` retires the questionnaire as well.
+⚠️ **The declaration opens an obligation — a smaller and later one than the
+first version of this section claimed.** Checked against BIS and Apple on
+2026-09-02:
+
+| | Status |
+|---|---|
+| Encryption registration (**ERN**) | **Gone.** BIS removed it in its rule of 29 March 2021 — nothing to register before exporting. |
+| **CCATS** | **Probably not needed.** Apple requires one only for *proprietary* algorithms no standards body accepts. Every primitive here is an IETF RFC — ChaCha20-Poly1305 (8439), Curve25519 (7748), BLAKE2s (7693) — Apple's "industry standard algorithm, not provided within the Apple operating system" row. |
+| **France declaration** | Only if the app is sold on the French App Store. An Indonesia-only release owes nothing. |
+| **Annual self-classification report** | **Retrospective, not a precondition.** ECCN 5D002 under License Exception ENC §740.17(b)(1), due 1 February for the *previous* calendar year and not owed at all for a year with no exports. CSV, 12 columns, to `crypt@bis.doc.gov` and `enc@nsa.gov`. |
+
+So the only export step between here and a release is **App Store Connect's own
+questionnaire**. US export rules apply at all because the App Store distributes
+from the US — an Indonesian developer account does not change that.
+
+The CCATS row is the one judgement worth a professional opinion: if anyone reads
+wireguard-go's protocol as proprietary rather than standard, a CCATS is a BIS
+submission with a waiting period attached.
 
 `AvangardVPNDeviceTest` carries neither the key nor the obligation: it is a
 free-signed local build that never reaches App Store Connect.
@@ -309,9 +320,9 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
       assigns a v6 address. On-demand is deliberately off (see
       `VPNConfiguration.apply`): it is a product decision on a metered plan, and
       it would reconnect after a user had deliberately disconnected.
-- [ ] **P6** — TestFlight distribution. Gated on the enrolment **and** on the
-      export-compliance filing above — the second is paperwork, not code, and
-      nobody has started it.
+- [ ] **P6** — TestFlight distribution. Gated on the enrolment, and on
+      answering App Store Connect's export questionnaire — see
+      [`ITSAppUsesNonExemptEncryption`](#itsappusesnonexemptencryption-true).
 
 ### Still missing, and why it matters
 
@@ -324,10 +335,12 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
   them needed an Apple account — which is precisely why the earlier wording here
   ("the enrolment is the remaining gate") was wrong and worth correcting: it
   would have let two of them sit unnoticed until a build bounced.
-- **One task is open that no amount of code will close.** Declaring non-exempt
-  encryption commits us to the annual ECCN 5D002 self-classification filing
-  before TestFlight can reach a tester. Nobody has filed it. It is independent
-  of the enrolment and can proceed in parallel — see
+- **One open item is paperwork rather than code, and it is smaller than it
+  first looked here.** Declaring non-exempt encryption puts us under License
+  Exception ENC, whose annual ECCN 5D002 report covers **the previous year's
+  exports** — so nothing is owed until the app has actually shipped. What is
+  needed *before* release is App Store Connect's export questionnaire, plus a
+  French declaration only if France is a market. See
   [Privacy manifest and export compliance](#privacy-manifest-and-export-compliance).
 - The **paid Apple Developer Program enrolment** is the remaining *engineering*
   gate. It blocks P3-on-hardware, P5 and P6, and there is no workaround — a free
