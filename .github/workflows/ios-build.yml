@@ -87,8 +87,13 @@ jobs:
       # Installs Go, because the runner does not have it. The earlier version of
       # this step was just `go version` on the assumption that macos-26 shipped
       # Go 1.24.13 — it does not ship Go at all, and CI answered with
-      # `go: command not found`. Xcode never bundled it either, so on the Mac
-      # this is `brew install go` before the first build.
+      # `go: command not found`. Xcode never bundled it either.
+      #
+      # ⛔ On a Mac this is NOT `brew install go`, which an earlier version of
+      # this comment said: that installs the newest Go, and the pin below is
+      # 1.21 for reasons the next comment spells out. Homebrew cannot help at
+      # all here — go@1.21 is a disabled formula. Use the go.dev archive; see
+      # the README's Build section.
       #
       # cache: false on purpose. setup-go's own cache keys off go.sum, and
       # wireguard-go's go.sum lives inside the SPM checkout, which does not
