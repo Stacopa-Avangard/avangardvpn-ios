@@ -10,11 +10,31 @@ name: Build iOS (unsigned)
 # the Simulator at all (upstream's Makefile has no iphonesimulator case). Only
 # the test host builds and runs on a Simulator; see project.yml.
 
+# Markdown-only changes do not build, on either trigger. A macOS runner bills at
+# a 10x multiplier and a run here takes 8-12 minutes, so roughly twenty runs a
+# month is the whole Free-plan budget -- and four of the six runs before this
+# change were pure documentation.
+#
+# It has to sit on BOTH triggers. With it on `pull_request` alone, merging a docs
+# PR still fires a full build on main, which is exactly what PR #17 did.
+#
+# Skipping requires EVERY changed file to match, so a PR touching both a .md and
+# a .swift still builds. The failure direction is a wasted build, never a missed
+# one.
+#
+# ⚠️ This is only safe because the repo has NO required status checks -- branch
+# protection is unavailable on the current plan. A skipped job reports nothing at
+# all, so the day `build` becomes required, a docs-only PR is unmergeable
+# forever. If protection is ever switched on, delete these `paths-ignore` blocks
+# and gate the expensive steps inside the job instead, so the check always
+# reports.
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'LICENSE', '.gitignore']
   pull_request:
     branches: [main]
+    paths-ignore: ['**.md', 'LICENSE', '.gitignore']
   workflow_dispatch:
 
 concurrency:
