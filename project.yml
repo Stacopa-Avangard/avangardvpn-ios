@@ -86,9 +86,17 @@ targets:
       # config is to compile the same file. Both app targets need it because
       # TunnelConfig (in App/Sources) hands back a TunnelProfile.
       - path: Shared/Sources
-      # The app icon, and the only asset catalog in the project. The 1024 PNG is
-      # rendered from the SAME brand vector the Android launcher icon uses —
-      # see Tools/render-app-icon.swift. Do not hand-edit the PNG; re-run that.
+      # Two things, both copied into the bundle rather than compiled:
+      #
+      #   Assets.xcassets — the app icon, the only asset catalog in the
+      #   project. The 1024 PNG is rendered from the SAME brand vector the
+      #   Android launcher icon uses — see Tools/render-app-icon.swift. Do not
+      #   hand-edit the PNG; re-run that.
+      #
+      #   PrivacyInfo.xcprivacy — the privacy manifest, mandatory since May
+      #   2024. XcodeGen has no rule for the .xcprivacy extension, so it takes
+      #   the default for an unknown type and lands in Copy Bundle Resources,
+      #   which is where Apple looks for it. Nothing else to wire up.
       - path: App/Resources
     info:
       path: App/Info.plist
@@ -103,6 +111,28 @@ targets:
         # still held to full ATS requirements.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Export compliance, answered here so App Store Connect stops asking it
+        # per build. TRUE is not the cautious answer, it is the only accurate
+        # one — and getting it wrong is a false declaration to a US government
+        # process, not a checkbox.
+        #
+        # The exemption people reach for is "only uses encryption available in
+        # the operating system". That fits an app whose crypto is HTTPS through
+        # URLSession. It does not fit this one: wireguard-go carries its own
+        # ChaCha20-Poly1305, Curve25519 and BLAKE2s, compiled into the extension
+        # we embed. None of the other exemptions (authentication-only, DRM,
+        # medical) come close either. A VPN is the textbook non-exempt case.
+        #
+        # ⚠️ This does NOT complete export compliance, it commits us to it.
+        # Before the first TestFlight build can reach a tester, someone has to
+        # file the annual self-classification report for ECCN 5D002 under
+        # License Exception ENC §740.17(b)(1) — to BIS and the NSA ENC
+        # coordinator — and answer App Store Connect's questionnaire (including
+        # the separate France question). US EAR applies because the App Store
+        # distributes from the US; an Indonesian developer account does not
+        # change that. Once an ERN/CCATS code exists, add it as
+        # ITSEncryptionExportComplianceCode and the questionnaire stops too.
+        ITSAppUsesNonExemptEncryption: true
     # ⚠️ The app carries the SAME networkextension entitlement as the extension
     # it embeds, and that is not a copy-paste slip. NETunnelProviderManager —
     # the API the app uses to save the VPN configuration and start the tunnel —
@@ -185,9 +215,17 @@ targets:
       # config is to compile the same file. Both app targets need it because
       # TunnelConfig (in App/Sources) hands back a TunnelProfile.
       - path: Shared/Sources
-      # The app icon, and the only asset catalog in the project. The 1024 PNG is
-      # rendered from the SAME brand vector the Android launcher icon uses —
-      # see Tools/render-app-icon.swift. Do not hand-edit the PNG; re-run that.
+      # Two things, both copied into the bundle rather than compiled:
+      #
+      #   Assets.xcassets — the app icon, the only asset catalog in the
+      #   project. The 1024 PNG is rendered from the SAME brand vector the
+      #   Android launcher icon uses — see Tools/render-app-icon.swift. Do not
+      #   hand-edit the PNG; re-run that.
+      #
+      #   PrivacyInfo.xcprivacy — the privacy manifest, mandatory since May
+      #   2024. XcodeGen has no rule for the .xcprivacy extension, so it takes
+      #   the default for an unknown type and lands in Copy Bundle Resources,
+      #   which is where Apple looks for it. Nothing else to wire up.
       - path: App/Resources
     info:
       path: App/DeviceTest-Info.plist
@@ -200,6 +238,10 @@ targets:
         # machine over the LAN. Only relaxes ATS for local addresses.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # No ITSAppUsesNonExemptEncryption here, and that is not an oversight.
+        # The key exists to answer App Store Connect; this target is a local
+        # free-signed build that never reaches it. Adding it would imply the
+        # export-compliance obligation applies to a build nobody distributes.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
@@ -249,6 +291,10 @@ targets:
     sources:
       - path: Tunnel/Sources
       - path: Shared/Sources
+      # The extension's OWN privacy manifest. Not a duplicate of the app's: the
+      # manifest is per-bundle and Apple scans each binary separately, and this
+      # is the binary that links libwg-go.a. See the file for what that costs.
+      - path: Tunnel/Resources
     info:
       path: Tunnel/Info.plist
       properties:

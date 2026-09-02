@@ -141,6 +141,41 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
+      # The three App Store upload requirements all fail the same way: the build
+      # is green and the upload is rejected (ITMS-90713 for the icon, ITMS-91053
+      # for a privacy manifest). None of them affects compilation, so no step
+      # above can notice. Assert them on the built product instead.
+      #
+      # This is also the only check anywhere that XcodeGen actually put the
+      # .xcprivacy files into Copy Bundle Resources. It has no rule for that
+      # extension and falls through to the default for unknown types; that is
+      # behaviour we depend on, so it should be a test rather than a belief.
+      - name: Assert the built app carries what App Store Connect requires
+        run: |
+          APP="$(find .derivedData/Build/Products -maxdepth 2 -name 'AvangardVPN.app' -print -quit)"
+          if [ -z "$APP" ]; then echo "::error::AvangardVPN.app not found"; exit 1; fi
+          echo "==> $APP"
+
+          if [ ! -f "$APP/PrivacyInfo.xcprivacy" ]; then
+            echo "::error::app privacy manifest missing from the bundle (ITMS-91053)"; exit 1
+          fi
+
+          APPEX="$(find "$APP/PlugIns" -maxdepth 1 -name '*.appex' -print -quit 2>/dev/null || true)"
+          if [ -z "$APPEX" ]; then echo "::error::tunnel extension not embedded"; exit 1; fi
+          if [ ! -f "$APPEX/PrivacyInfo.xcprivacy" ]; then
+            echo "::error::extension privacy manifest missing from $APPEX (ITMS-91053)"; exit 1
+          fi
+
+          if ! plutil -extract ITSAppUsesNonExemptEncryption raw "$APP/Info.plist"; then
+            echo "::error::ITSAppUsesNonExemptEncryption absent - every build lands in Missing Compliance"; exit 1
+          fi
+
+          if ! plutil -extract CFBundleIconName raw "$APP/Info.plist"; then
+            echo "::error::no app icon in the bundle (ITMS-90713)"; exit 1
+          fi
+
+          echo "OK: privacy manifests (app + extension), export compliance, icon"
+
       - name: Build device-test target (unsigned)
         # The free-Apple-ID target shares App/Sources with the production app but
         # deliberately carries none of its entitlements. Building it here catches

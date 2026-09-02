@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PrivacyInfo.xcprivacy — privacy manifest for the tunnel extension.
+
+  A second file rather than a second section of the app's, because the manifest
+  is per-BUNDLE and Apple scans each binary it finds. The extension links
+  libwg-go.a, which the app binary does not, and that alone gives it a
+  different answer to give.
+
+  See App/Resources/PrivacyInfo.xcprivacy for the app's, and for the editing
+  rules that apply to both.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSPrivacyTracking</key>
+  <false/>
+  <key>NSPrivacyTrackingDomains</key>
+  <array/>
+
+  <!--
+    Empty, and that is the whole point of the product.
+
+    This process moves the user's packets and reports nothing about them to us.
+    It reads its configuration out of the saved VPN profile the system hands it
+    (see PacketTunnelProvider.startTunnel), answers the app's own
+    handleAppMessage with the backend's runtime counters, and transmits to no
+    one else. There is no analytics channel, no crash reporter and no log
+    upload — os.Logger writes to the device's log, which never leaves it.
+  -->
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array/>
+
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <!--
+      Not our Swift code — the Go runtime inside libwg-go.a. wireguard-go keeps
+      its handshake, rekey and keepalive timers on a monotonic clock, and on
+      darwin the Go runtime's nanotime is mach_absolute_time, imported
+      dynamically from libSystem. Apple's scanner reads the symbol, not the
+      intent, so an undeclared extension earns ITMS-91053 even though no line
+      in Tunnel/Sources asks for the boot time.
+
+      35F9.1 is the accurate reason of the four: elapsed time between events
+      inside this process. It is NOT 8FFB.1 (absolute timestamps for user-
+      visible events) and NOT 3D61.1 (CoreMotion), neither of which happens
+      here.
+
+      ⚠️ Do not delete this on the grounds that grepping Tunnel/Sources finds
+      nothing. It is declared for a dependency's binary, and it goes away only
+      if wireguard-go does.
+    -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>35F9.1</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PrivacyInfo.xcprivacy — the app's privacy manifest.
+
+  Required since 1 May 2024. Its absence is not a warning: App Store Connect
+  answers an upload with ITMS-91053 ("Missing API declaration") and the build
+  never becomes submittable. Nothing about it needs a paid account, which is
+  why it lands now rather than with the enrolment.
+
+  Scope is THIS bundle. The tunnel extension is a separate bundle with its own
+  binary and carries its own manifest at Tunnel/Resources/PrivacyInfo.xcprivacy
+  — it declares a different API and collects nothing.
+
+  ⚠️ Two rules for editing this file:
+    1. "Collect" means transmitted off the device. Data the SERVER holds but
+       this app never sends (the account's display name, quota counters) does
+       not belong here — it belongs on the App Store privacy label, which is a
+       separate form in App Store Connect.
+    2. Every entry below is traceable to a line of code. If you add a data type
+       or an API category, name the call site in a comment, or the next person
+       cannot tell an obsolete declaration from a load-bearing one.
+-->
+<plist version="1.0">
+<dict>
+  <!--
+    No tracking, in Apple's sense of the word: nothing here is ever joined with
+    data from other companies' apps or sites, and there is no ad identifier,
+    no analytics SDK and no third-party SDK of any kind in this project apart
+    from WireGuardKit. NSPrivacyTrackingDomains must stay empty while this is
+    false — Apple rejects a manifest that claims both.
+  -->
+  <key>NSPrivacyTracking</key>
+  <false/>
+  <key>NSPrivacyTrackingDomains</key>
+  <array/>
+
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array>
+    <!--
+      The address typed on the sign-in screen, sent to POST /auth/request-link
+      and POST /auth/demo-login (Core/APIClient.swift). It is the account
+      identity — there is no other credential — so it is linked, and it is the
+      first data the app collects, which is why the privacy and terms links sit
+      on that screen too.
+    -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeEmailAddress</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+
+    <!--
+      The account id in AuthUser, and the access/refresh tokens minted against
+      it. Sent back on every authenticated request (Core/APIClient.swift).
+    -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeUserID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+
+    <!--
+      DeviceIdentity.id — a UUID minted on this device, kept in the Keychain,
+      uploaded as `deviceId` with each region registration. It exists because
+      the backend enforces a per-user device cap and identifierForVendor would
+      rotate on reinstall and burn through it.
+
+      Declared even though we chose it rather than Apple: Apple's Device ID
+      category is "any identifier that relates to a device", and a
+      device-generated one is named in that definition.
+
+      NOT declared alongside it: `deviceName`. On iOS 16 and later — and 16.0
+      is this project's floor — UIDevice.current.name returns the model string
+      ("iPhone") unless the app carries a special entitlement, which it does
+      not. It is a label, identical across every iPhone, and identifies nobody.
+    -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeDeviceID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+  </array>
+
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <!--
+      Provisioning/ProvisioningStore.swift reads and writes the active region
+      code in UserDefaults.standard — the only required-reason API this binary
+      touches. Everything sensitive goes to the Keychain instead (tokens, the
+      private key, the device id), and the Keychain is not a required-reason
+      API.
+
+      CA92.1 is the right reason and 1C8F.1 is not: the store is the app's own
+      standard suite, not a suite opened on group.com.avangard.vpn. The app
+      group exists for the tunnel profile, which the system persists for us.
+    -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>
