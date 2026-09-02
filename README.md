@@ -56,6 +56,28 @@ tests on the Simulator unsigned.
 The project is **text-defined** (XcodeGen), so it can be authored on any OS and
 compiled on macOS.
 
+⛔ **Go 1.21 first, and only 1.21.** The wireguard-go bridge patches the Go
+runtime so its monotonic clock follows boot time — that is what keeps WireGuard's
+handshake and keepalive timers alive while the phone sleeps. The patch was
+written against Go 1.17-1.21 and does not apply to an arbitrary newer runtime,
+and the failure it prevents is a tunnel that dies silently overnight. CI pins
+`go-version: "1.21"` for exactly this.
+
+Homebrew is not the route: `go@1.21` is a **disabled** formula, so the install is
+refused. Use the official archive — go.dev keeps every release ever shipped:
+
+```bash
+curl -LO https://go.dev/dl/go1.21.13.darwin-arm64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.13.darwin-arm64.tar.gz
+/usr/local/go/bin/go version    # expect go1.21.13
+```
+
+⚠️ The bridge target spawns `/usr/bin/env make`, so it resolves `go` from
+**Xcode's** build PATH — not your shell's, and not necessarily including
+`/usr/local/go/bin`. If the build fails with `go: command not found` at
+`WireGuardGoBridge` while `go version` works in a terminal, that gap is the
+cause and not a missing install.
+
 ```bash
 # On macOS (or CI):
 brew install xcodegen
