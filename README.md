@@ -72,11 +72,25 @@ sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.13.darwin-arm64.
 /usr/local/go/bin/go version    # expect go1.21.13
 ```
 
-⚠️ The bridge target spawns `/usr/bin/env make`, so it resolves `go` from
-**Xcode's** build PATH — not your shell's, and not necessarily including
-`/usr/local/go/bin`. If the build fails with `go: command not found` at
-`WireGuardGoBridge` while `go version` works in a terminal, that gap is the
-cause and not a missing install.
+⚠️ The bridge target spawns `/usr/bin/env make`, so it resolves `go` — and
+`rsync` — from **Xcode's** build PATH, not your shell's. Measured on macOS 26 on
+2026-09-02 by running `xcodebuild` under a sanitised environment: Xcode adds
+nothing of its own, and `launchctl getenv PATH` is empty on a stock machine, so a
+GUI-launched Xcode builds with exactly `/usr/bin:/bin:/usr/sbin:/sbin`. That
+contains neither `/usr/local/go/bin` nor Homebrew's `/opt/homebrew/bin`, so
+extracting Go and running `brew install rsync` is **not** enough on its own —
+[Step 1](#step-1--go-121-and-only-121) carries the rest.
+
+⛔ And the failure does not say `go: command not found`, which an earlier version
+of this file promised. `Sources/WireGuardKitGo/Makefile:27` reads
+`REAL_GOROOT := $(shell go env GOROOT 2>/dev/null)`, so the real error is
+swallowed and the build reports only this:
+
+```
+/usr/bin/env make
+[ -n "" ]
+make: *** [.../wireguard-go-bridge/goroot/.prepared] Error 1
+```
 
 ```bash
 # On macOS (or CI):
@@ -128,10 +142,37 @@ sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.13.darwin-arm64.
 /usr/local/go/bin/go version    # expect go1.21.13
 ```
 
+⛔ **Extracting it is only half the job.** The bridge resolves `go` and `rsync`
+from Xcode's build PATH, and a GUI-launched Xcode gets
+`/usr/bin:/bin:/usr/sbin:/sbin` and nothing else. Put both tools somewhere that
+PATH can reach, then tell the GUI about it:
+
+```bash
+brew install rsync                                   # GNU rsync; see Step 2
+sudo ln -s /usr/local/go/bin/go    /usr/local/bin/go
+sudo ln -s /opt/homebrew/bin/rsync /usr/local/bin/rsync
+
+launchctl setenv PATH "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+```
+
+Order matters: `/usr/local/bin` has to come **before** `/usr/bin`, or `rsync`
+still resolves to macOS's openrsync and the toolchain copy fails with `Error 20`.
+
+⚠️ Two limits worth knowing before you lose an hour. `launchctl setenv` does not
+survive a reboot — make it a LaunchAgent if you want it permanent. And **Xcode
+must be restarted** to inherit it, because a running Xcode keeps the PATH it was
+launched with.
+
+A CLI build (`xcodebuild` from your shell) inherits your shell's PATH instead, so
+it can pass while the GUI still fails on the same tree. Proving the toolchain and
+proving the GUI's view of it are two separate checks; do both.
+
 ### Step 2 — generate and open
 
 ```bash
 brew install xcodegen rsync    # rsync: macOS ships openrsync, which the bridge's Makefile fails on
+                               # installing it is necessary but not sufficient — Step 1's
+                               # symlink is what puts it on Xcode's build PATH
 git pull
 xcodegen generate && open AvangardVPN.xcodeproj
 ```
@@ -167,8 +208,8 @@ filter on subsystem `com.avangard.vpn.network-extension`.
 
 | Symptom | Cause |
 |---|---|
-| `go: command not found` at `WireGuardGoBridge`, but `go version` works in a terminal | Xcode's build PATH is not your shell's. The target spawns `/usr/bin/env make`. **Not** a missing install |
-| `make: Error 20` while copying the toolchain | openrsync. `brew install rsync` |
+| `[ -n "" ]` followed by `make: *** [.../goroot/.prepared] Error 1` | **This is what a `go` Xcode cannot see actually looks like** — `Makefile:27` runs `go env GOROOT 2>/dev/null`, so `command not found` never reaches you. Xcode's build PATH is not your shell's. Redo Step 1's symlink + `launchctl setenv`, then restart Xcode. **Not** a missing install |
+| `make: Error 20` while copying the toolchain | `rsync` resolved to macOS's openrsync. `brew install rsync` alone does not fix a GUI build: `/opt/homebrew/bin` is not on Xcode's PATH. Symlink it into `/usr/local/bin` and put that **before** `/usr/bin` (Step 1) |
 | No provisioning profile found | A capability is missing on one of the App IDs — most often App Groups enabled but with **zero** groups bound. `Enabled App Groups (1)`, not `(0)` |
 | `saveToPreferences` fails | The **app** target is missing `packet-tunnel-provider`. It is not a copy-paste slip that the app carries the extension's entitlement — `NETunnelProviderManager` is gated on it at the calling side too |
 | Connects, then nothing loads | Look for `startTunnel` in Console. A handshake that never completes points at the peer config, not at the app |
