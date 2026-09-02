@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Export options for the TestFlight build. Used by `xcodebuild -exportArchive`
+  in .github/workflows/ios-release.yml.
+
+  signingStyle is automatic on purpose. The alternative is checking two
+  provisioning profiles into the repo and rotating them by hand every year,
+  with the expiry surfacing as a CI failure twelve months after anyone last
+  thought about it. With automatic signing plus -allowProvisioningUpdates and
+  an App Store Connect API key, Xcode creates and renews both profiles itself.
+  The only long-lived secret is the distribution certificate.
+
+  ⚠️ "app-store-connect" is the Xcode 15.3+ spelling. Older Xcode called it
+  "app-store" and rejects this one; if the export ever fails with an unknown
+  method, that rename is the first thing to check — not the certificate.
+-->
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>app-store-connect</string>
+  <key>teamID</key>
+  <string>8HSUX5T86H</string>
+  <key>signingStyle</key>
+  <string>automatic</string>
+  <!-- Symbols let App Store Connect symbolicate crash reports from testers.
+       There is no privacy cost: they describe our own binary, not the user. -->
+  <key>uploadSymbols</key>
+  <true/>
+  <!-- Export the .ipa rather than uploading from here. Uploading is a separate
+       step in the workflow so that a signing failure and an upload failure are
+       distinguishable in the log; combined, both read as "export failed". -->
+  <key>destination</key>
+  <string>export</string>
+</dict>
+</plist>

@@ -1,0 +1,215 @@
+name: TestFlight
+
+# Builds a signed .ipa and uploads it to TestFlight. Deliberately NOT on push:
+# a run costs roughly 130 minutes of Actions quota (macOS runners bill at a 10x
+# multiplier against the org's 2,000 free minutes), so this fires only when
+# someone asks for it or tags a release.
+#
+# Why it exists: nobody on this project has a Mac in reach, and a packet-tunnel
+# extension cannot run in the Simulator — so the only way to watch the tunnel
+# actually come up is to get a signed build onto a real iPhone. TestFlight is
+# that path, and internal testers need no Beta App Review, so a build uploaded
+# here is installable within minutes.
+#
+# ⚠️ Signing is automatic, not manual, and that is a maintenance decision. The
+# alternative is two provisioning profiles checked in and hand-rotated every
+# year, whose expiry surfaces as a CI failure long after anyone remembers why.
+# With -allowProvisioningUpdates and an App Store Connect API key, Xcode creates
+# and renews both profiles itself. The one long-lived secret is the
+# distribution certificate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What testers should look at in this build"
+        required: false
+        default: "Internal build"
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode + show version
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || echo /Applications/Xcode.app)"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # See ios-build.yml: macOS 15 replaced GNU rsync with openrsync, which the
+      # bridge's Makefile fails on when it copies the Go toolchain.
+      - name: Install GNU rsync (Makefile copies GOROOT with it)
+        run: brew install rsync
+
+      - name: Cache SPM checkouts
+        uses: actions/cache@v4
+        with:
+          path: .derivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: go-${{ runner.os }}-
+
+      # 1.21, for the same reason ios-build.yml pins it: the bridge's Makefile
+      # patches the Go runtime so its monotonic clock follows boot time, and that
+      # patch was written against Go 1.17-1.21. Anything newer breaks it, and the
+      # failure it prevents is a tunnel that dies silently while the phone
+      # sleeps. A release build is the last place to discover that.
+      - name: Set up Go (wireguard-go bridge needs it)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: false
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # The certificate lives in a throwaway keychain deleted in the final step,
+      # so nothing signable is left behind on a shared runner image.
+      #
+      # set-key-partition-list is the line people omit. Without it macOS prompts
+      # for keychain access when codesign reaches for the private key — and on a
+      # headless runner a prompt nobody can answer reads as a hang rather than as
+      # a permissions problem.
+      - name: Import signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          CERT_P12_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CERT_P12_BASE64:-}" ]; then
+            echo "::error::secret IOS_DIST_CERT_P12_BASE64 is not set - see the README's TestFlight section"
+            exit 1
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/dist.p12" -P "$CERT_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+
+          rm -f "$RUNNER_TEMP/dist.p12"
+          echo "identities in the signing keychain:"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      # xcodebuild and altool both authenticate with this key: xcodebuild to
+      # create and renew provisioning profiles, altool to upload. Written to
+      # disk because both take a path; never echoed.
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ASC_KEY_P8_BASE64:-}" ]; then
+            echo "::error::secret ASC_API_KEY_P8_BASE64 is not set - see the README's TestFlight section"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          KEY_PATH="$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      # TestFlight rejects a build number it has already seen, so it has to rise
+      # on its own. github.run_number does that without a commit, and never goes
+      # backwards even across branches.
+      - name: Archive
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild archive -project AvangardVPN.xcodeproj -scheme AvangardVPN -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/AvangardVPN.xcarchive" -derivedDataPath .derivedData -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" CURRENT_PROJECT_VERSION=${{ github.run_number }}
+
+      - name: Export .ipa
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/AvangardVPN.xcarchive" -exportOptionsPlist Distribution/ExportOptions.plist -exportPath "$RUNNER_TEMP/export" -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ls -lh "$RUNNER_TEMP/export"
+
+      # Assert what the archive actually contains before spending an upload on
+      # it. A missing privacy manifest or icon comes back from App Store Connect
+      # as an email minutes later; here it is a failed step with a name on it.
+      - name: Assert the .ipa carries what App Store Connect requires
+        run: |
+          set -euo pipefail
+          IPA="$(find "$RUNNER_TEMP/export" -name '*.ipa' -print -quit)"
+          if [ -z "$IPA" ]; then echo "::error::no .ipa was exported"; exit 1; fi
+          echo "==> $IPA"
+          unzip -o -q "$IPA" -d "$RUNNER_TEMP/unpacked"
+          APP="$(find "$RUNNER_TEMP/unpacked/Payload" -maxdepth 1 -name '*.app' -print -quit)"
+          if [ -z "$APP" ]; then echo "::error::no .app inside the .ipa"; exit 1; fi
+
+          if [ ! -f "$APP/PrivacyInfo.xcprivacy" ]; then
+            echo "::error::app privacy manifest missing (ITMS-91053)"; exit 1
+          fi
+          APPEX="$(find "$APP/PlugIns" -maxdepth 1 -name '*.appex' -print -quit 2>/dev/null || true)"
+          if [ -z "$APPEX" ]; then echo "::error::tunnel extension not embedded"; exit 1; fi
+          if [ ! -f "$APPEX/PrivacyInfo.xcprivacy" ]; then
+            echo "::error::extension privacy manifest missing (ITMS-91053)"; exit 1
+          fi
+          plutil -extract CFBundleIconName raw "$APP/Info.plist" > /dev/null || {
+            echo "::error::no top-level CFBundleIconName (ITMS-90713)"; exit 1; }
+          plutil -extract ITSAppUsesNonExemptEncryption raw "$APP/Info.plist" > /dev/null || {
+            echo "::error::ITSAppUsesNonExemptEncryption absent"; exit 1; }
+
+          echo "display name : $(plutil -extract CFBundleDisplayName raw "$APP/Info.plist")"
+          echo "version      : $(plutil -extract CFBundleShortVersionString raw "$APP/Info.plist") ($(plutil -extract CFBundleVersion raw "$APP/Info.plist"))"
+          echo "OK: privacy manifests, icon, export compliance"
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA="$(find "$RUNNER_TEMP/export" -name '*.ipa' -print -quit)"
+          export API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/private_keys"
+          xcrun altool --upload-app --type ios --file "$IPA" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Keep the .ipa for 7 days
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AvangardVPN-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # Runs even when an earlier step failed. A signing keychain left behind on
+      # a runner is the kind of thing that is fine every time until it is not.
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "${SIGNING_KEYCHAIN:-}" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/private_keys"
