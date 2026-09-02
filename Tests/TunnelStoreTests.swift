@@ -258,7 +258,7 @@ final class TunnelStoreTests: XCTestCase {
 
     func testAppliedSettingsNameTheRegionForTheSettingsApp() async {
         await connect()
-        XCTAssertEqual(vpn.created?.applied?.localizedDescription, "Avangard VPN — Singapore")
+        XCTAssertEqual(vpn.created?.applied?.localizedDescription, "AvangardVPN — Singapore")
     }
 
     // MARK: - Failures

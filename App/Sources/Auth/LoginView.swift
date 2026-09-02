@@ -25,7 +25,7 @@ struct LoginView: View {
 
             ShieldMark()
 
-            Text("Avangard VPN")
+            Text("AvangardVPN")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(Theme.text)
                 .padding(.top, 18)

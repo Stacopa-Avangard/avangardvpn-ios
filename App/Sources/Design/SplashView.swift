@@ -39,6 +39,6 @@ struct SplashView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Avangard VPN")
+        .accessibilityLabel("AvangardVPN")
     }
 }

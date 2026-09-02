@@ -151,7 +151,7 @@ final class TunnelStore: ObservableObject {
         /*
           Reuse before create. A fresh NETunnelProviderManager saved each time
           is an extra row under Settings → VPN each time — the user ends up
-          with a list of identical "Avangard VPN" entries and no way to tell
+          with a list of identical "AvangardVPN" entries and no way to tell
           which one the app is driving.
 
           Everything `loadAll` returns belongs to this app, so `first` is
@@ -167,7 +167,7 @@ final class TunnelStore: ObservableObject {
                 providerBundleIdentifier: Self.providerBundleIdentifier,
                 providerConfiguration: config.profile.providerConfiguration,
                 serverAddress: Self.host(of: config.endpoint),
-                localizedDescription: "Avangard VPN — \(regionName)"
+                localizedDescription: "AvangardVPN — \(regionName)"
             )
         )
 
