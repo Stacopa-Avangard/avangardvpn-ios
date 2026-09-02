@@ -400,10 +400,30 @@ targets:
   # <DerivedData>/Build/Products to <DerivedData>, which is where SourcePackages
   # lives. That holds for Xcode's own DerivedData and for CI's -derivedDataPath.
   #
-  # Needs Go >= 1.19 on the build machine. Xcode does NOT bundle it —
-  # `brew install go` on the Mac before the first build. The macOS CI runner
-  # does not ship Go either — CI proved that with `go: command not found` — so
-  # the workflow installs it with actions/setup-go.
+  # ⛔ Needs Go **1.21** on the build machine — not "recent", not latest. An
+  # earlier version of this comment said `brew install go`, which is the exact
+  # wrong instruction: it installs the newest Go, and the Makefile here patches
+  # the Go runtime with goruntime-boottime-over-monotonic.diff, written against
+  # Go 1.17-1.21. That patch is what keeps WireGuard's handshake and keepalive
+  # timers running while the phone sleeps. ios-build.yml pins go-version 1.21
+  # for the same reason and explains it at length.
+  #
+  # Homebrew is not the way in: go@1.21 is a DISABLED formula, so the install is
+  # refused rather than merely warned about. Use the official archive, which
+  # go.dev keeps for every release that ever shipped:
+  #
+  #   curl -LO https://go.dev/dl/go1.21.13.darwin-arm64.tar.gz
+  #   sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.13.darwin-arm64.tar.gz
+  #
+  # ⚠️ Then make sure THIS target can see it. It spawns `/usr/bin/env make`, so
+  # it resolves `go` from Xcode's build PATH, which is not your shell's and does
+  # not necessarily include /usr/local/go/bin. If the build fails with
+  # `go: command not found` at this target while `go version` works fine in a
+  # terminal, that gap is the cause, not a missing install.
+  #
+  # Xcode does NOT bundle Go, and neither does the macOS CI runner — CI proved
+  # that with `go: command not found` — so the workflow installs it with
+  # actions/setup-go.
   #
   # An empty `type` is what marks a legacy target. XcodeGen has no `none` case
   # at all — `type: none` was a guess, and CI rejected the spec outright with
