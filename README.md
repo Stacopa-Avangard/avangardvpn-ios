@@ -68,7 +68,105 @@ open AvangardVPN.xcodeproj    # develop / run on a device from Xcode
 Apple account**. (VPN can't actually run in the Simulator — device testing needs a
 real iPhone + signing.)
 
+## ▶ Running it on a real iPhone (paid account) — start here
+
+⬜ **This is the one thing nobody has done yet.** The tunnel is code-complete and
+CI-green, and every release artifact is in place — but no human has watched it
+come up. Until someone does, treat the connect path as unverified.
+
+Self-contained on purpose: follow it top to bottom on the Mac without reading the
+rest of this file.
+
+### Where things stand — 2026-09-02
+
+| | |
+|---|---|
+| Apple Developer Program | ✅ paid. Apple sends the payment link only after Organization verification passes, so `PT Stacopa Avangard Raya` cleared it |
+| `DEVELOPMENT_TEAM` | ✅ `8HSUX5T86H`, set in `project.yml` so `xcodegen generate` cannot wipe it |
+| App ID `com.avangard.vpn` | ✅ Network Extensions + App Groups |
+| App ID `com.avangard.vpn.network-extension` | ✅ same — the extension needs both too |
+| App Group `group.com.avangard.vpn` | ✅ bound to both App IDs |
+| App icon, privacy manifests, export declaration | ✅ in the repo, asserted by CI on the built `.app` |
+| **Tunnel proven on hardware** | ⬜ **no — this is the task** |
+
+### Step 1 — Go 1.21, and only 1.21
+
+⛔ **Not `brew install go`.** That installs the newest Go, and the wireguard-go
+bridge patches the Go runtime so its monotonic clock follows boot time — the
+thing that keeps WireGuard's handshake and keepalive timers alive while the phone
+sleeps. The patch was written against Go 1.17-1.21, and the failure it prevents
+is a tunnel that dies silently overnight.
+
+Homebrew cannot help: `go@1.21` is a **disabled** formula, so the install is
+refused. Use the official archive — go.dev keeps every release ever shipped:
+
+```bash
+curl -LO https://go.dev/dl/go1.21.13.darwin-arm64.tar.gz   # darwin-amd64 on Intel
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.21.13.darwin-arm64.tar.gz
+/usr/local/go/bin/go version    # expect go1.21.13
+```
+
+### Step 2 — generate and open
+
+```bash
+brew install xcodegen rsync    # rsync: macOS ships openrsync, which the bridge's Makefile fails on
+git pull
+xcodegen generate && open AvangardVPN.xcodeproj
+```
+
+### Step 3 — run
+
+Scheme **AvangardVPN** — *not* `AvangardVPNDeviceTest`, which deliberately omits
+the tunnel extension and can never connect. Pick your iPhone, press **Run**, sign
+in, choose a region, press **Connect**.
+
+The app talks to production by default, so you need a real account at
+`https://app.avangardvpn.com`.
+
+### What success looks like
+
+The orb is the connection state: **indigo → amber while handshaking → emerald
+once traffic flows**, with the telemetry strip counting bytes. Nobody has seen
+the amber and emerald phases run — they are pinned by tests, not by observation.
+
+Then the honest checks, in order:
+
+1. Settings → VPN shows one **AvangardVPN — <region>** entry (one, not a pile)
+2. A "VPN" badge in the status bar
+3. `https://ifconfig.me` in Safari returns the node's IP, not your ISP's
+4. Lock the phone for half an hour, come back — still connected. That is the
+   boot-time clock patch doing its job, and the reason Go is pinned
+
+### If it fails
+
+Read the extension's log first. It is a separate process, so Xcode's console
+does not show it: open **Console.app**, select the iPhone in the sidebar, and
+filter on subsystem `com.avangard.vpn.network-extension`.
+
+| Symptom | Cause |
+|---|---|
+| `go: command not found` at `WireGuardGoBridge`, but `go version` works in a terminal | Xcode's build PATH is not your shell's. The target spawns `/usr/bin/env make`. **Not** a missing install |
+| `make: Error 20` while copying the toolchain | openrsync. `brew install rsync` |
+| No provisioning profile found | A capability is missing on one of the App IDs — most often App Groups enabled but with **zero** groups bound. `Enabled App Groups (1)`, not `(0)` |
+| `saveToPreferences` fails | The **app** target is missing `packet-tunnel-provider`. It is not a copy-paste slip that the app carries the extension's entitlement — `NETunnelProviderManager` is gated on it at the calling side too |
+| Connects, then nothing loads | Look for `startTunnel` in Console. A handshake that never completes points at the peer config, not at the app |
+| Works, then dies while the phone sleeps | The Go version. Go back to step 1 |
+
+### You do not need TestFlight for this
+
+`.github/workflows/ios-release.yml` builds and uploads without a Mac, and it is
+how releases will work — but it is the slower way to answer *this* question:
+15-20 minutes per attempt, and no device log to read when it fails. Prove the
+tunnel over a cable first, then let the pipeline take over.
+
 ## Trying it on a real iPhone (no paid account)
+
+⚠️ **Superseded for day-to-day use.** The enrolment is paid, so the section above
+is the real path. This one stays because `AvangardVPNDeviceTest` is still the
+only host that can run the test suite on a Simulator — deleting the target takes
+the tests with it — and because a free Personal Team remains the fallback if the
+paid account is ever unavailable.
+
 
 Everything built so far — sign-in, region provisioning, the UI — uses **no paid
 capability**. App Groups and NetworkExtension belong to the tunnel (P3), which
@@ -316,9 +414,12 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
 - [x] **P2** — Provisioning: Curve25519 keygen (CryptoKit), `POST /api/me/devices/regions`,
       local config assembly, region picker. Verified end-to-end against a local backend.
 - [x] **P3** — Tunnel: `PacketTunnelProvider` + WireGuardKit (wireguard-go build).
-      **Code complete and CI-green, not yet exercised on a phone** — that needs
-      the packet-tunnel entitlement, which needs the paid account. Treat the
-      connect path as unverified until someone has watched it come up.
+      **Code complete and CI-green, still not exercised on a phone.** The
+      entitlement that blocked it is now available — the enrolment is paid and
+      both App IDs are configured — so this is no longer waiting on anything but
+      someone doing it. Until then the connect path is unverified, and the
+      orb's amber and emerald phases have never been watched. See
+      [Running it on a real iPhone](#-running-it-on-a-real-iphone-paid-account--start-here).
 - [x] **P4** — SwiftUI UI: Connect / Account tabs, region picker sheet, quota
       meter, shared theme tokens. The connect control is live.
 - [x] **P4.5** — Design parity with Android: the "security console" system is
@@ -335,6 +436,12 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
 
 ### Still missing, and why it matters
 
+- ⬜ **The only unproven thing left is the tunnel itself.** Everything below is
+  known-good or known-cheap; this one is neither, because it has never been run.
+  Nothing blocks it any more — the enrolment is paid, both App IDs carry
+  Network Extensions and App Groups, and `DEVELOPMENT_TEAM` is set. It needs a
+  Mac, a phone and half an hour. Start at
+  [Running it on a real iPhone](#-running-it-on-a-real-iphone-paid-account--start-here).
 - **Nothing blocks review any more on the account side**: in-app account
   deletion (Guideline 5.1.1(v)), sign-in by code for the reviewer, and in-app
   privacy/terms links all landed with P4.5.
