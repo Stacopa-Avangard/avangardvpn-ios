@@ -178,8 +178,11 @@ filter on subsystem `com.avangard.vpn.network-extension`.
 
 `.github/workflows/ios-release.yml` builds and uploads without a Mac, and it is
 how releases will work — but it is the slower way to answer *this* question:
-15-20 minutes per attempt, and no device log to read when it fails. Prove the
-tunnel over a cable first, then let the pipeline take over.
+15-20 minutes per attempt, and no device log to read when it fails.
+
+⚠️ It has also **never been run**, and cannot be until its five secrets exist, so
+its first run is its own first test. Prove the tunnel over a cable first: two
+unproven things at once is what makes a failure hard to place.
 
 ## Trying it on a real iPhone (no paid account)
 
