@@ -24,11 +24,20 @@ Three targets in one Xcode project (defined by [`project.yml`](project.yml), Xco
 ## Prerequisites (for signed/device builds)
 
 - **Apple Developer Program** ($99/yr) — required for the NetworkExtension entitlement + TestFlight.
-  **Enrolment in progress as of 2026-09-02**; not yet usable for this app. This
-  is what blocks P3-on-device, P5, and P6. A free Apple ID cannot carry the
-  `packet-tunnel-provider` entitlement, so there is no workaround — everything
-  else was built so it could land without waiting on it.
-- App IDs + capabilities: **Network Extensions** (packet-tunnel-provider) + **App Groups** on both bundle IDs.
+  ✅ **Paid 2026-09-02.** Apple only sends the payment link once Organization
+  verification passes, so this also confirms `PT Stacopa Avangard Raya` cleared
+  verification. `DEVELOPMENT_TEAM` is set in [`project.yml`](project.yml); a
+  Team ID is not a secret, and leaving it blank meant `xcodegen generate` wiped
+  the team from the project on every run.
+- App IDs + capabilities: **Network Extensions** (packet-tunnel-provider) + **App Groups**
+  on **both** bundle IDs — `com.avangard.vpn` and `com.avangard.vpn.network-extension` —
+  plus the App Group `group.com.avangard.vpn`, which has to exist *before* either App ID can
+  reference it. The extension needs both capabilities too: `NETunnelProviderManager` is gated
+  on `packet-tunnel-provider` at the calling side as well as the providing side.
+
+  On iOS this is self-serve — enabling the capability is enough, with no entitlement request
+  to Apple. (The `networkextension@apple.com` request route is for macOS system extensions
+  and content filters.)
 - Signing via `fastlane match` (for CI) or Xcode automatic signing (local).
 
 Three upload requirements are already met and needed **none** of the above —
