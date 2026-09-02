@@ -15,6 +15,7 @@ Three targets in one XcodeGen project: the app, the `NEPacketTunnelProvider` ext
 - Apple Developer Program **paid**; Organization verification passed for `PT Stacopa Avangard Raya`, Team ID **`8HSUX5T86H`**.
 - Both App IDs registered with **Network Extensions + App Groups**: `com.avangard.vpn` and `com.avangard.vpn.network-extension`, both bound to App Group `group.com.avangard.vpn`.
 - P0–P4.5 done. App icon, both privacy manifests and the export declaration are in and asserted by CI on the built `.app`.
+- **No In-App Purchase** — decided 2026-09-02. The app sells nothing and may not promote what the website sells; see § *Monetisation* below before touching the Account or Home screens.
 - ⬜ **The tunnel has never been run on a phone.** Everything is code-complete and CI-green, and no human has watched it come up. The orb's amber and emerald phases are pinned by tests, not by observation. Treat the connect path as unverified, and do not write anything that implies otherwise.
 
 ## ⛔ Four things that must not be "fixed"
@@ -57,6 +58,61 @@ An earlier draft of the docs claimed the BIS filing blocks TestFlight. **It does
 - **The annual ECCN 5D002 self-classification report is retrospective** — due 1 February for the *previous* calendar year, and not owed at all for a year with no exports.
 
 The only export step before a release is App Store Connect's questionnaire.
+
+## Monetisation — the app sells nothing, on purpose
+
+Decided 2026-09-02: **Option A, no In-App Purchase.** The app is a free
+stand-alone companion to a paid web service; every purchase happens on
+`app.avangardvpn.com`. That is a policy position, not an unfinished feature.
+
+Two App Store rules stack here, and the VPN-specific one is the stricter:
+
+- **3.1.3(f) Free Stand-alone Apps** lets a free companion to a paid web tool
+  skip IAP *"provided there is no purchasing inside the app, or calls to action
+  for purchase outside of the app."*
+- **5.4 VPN Apps** goes further: a VPN app must *"be free on the App Store"* and
+  must *"not display prominent promotions for paid services in the VPN app
+  itself."* That bans promotion, not merely purchase links — a plan-comparison
+  banner with no button still breaks it.
+
+Neither escape hatch reaches us: the 0% external-link allowance from Epic v.
+Apple is **US storefront only**, and the DMA rates are EU only. Indonesia gets
+neither.
+
+### What this forbids
+
+⛔ When billing is switched on, none of these may enter the iOS app:
+
+1. A "Renew" / "Top up" / "Buy" control of any kind, including one that merely
+   opens a browser
+2. A price, anywhere
+3. Plan comparisons, upsell cards, promotional banners
+4. Push notifications inviting a purchase
+5. An out-of-quota message that *suggests what to do about it*
+
+Number 5 is the one that gets added by accident, because it reads as
+helpfulness. The safe wording is the one `NearQuotaBanner` already carries:
+**"You've hit your monthly limit. The VPN is paused until it resets."** It states
+what happened and recommends no remedy. Keep it that way.
+
+### What it allows
+
+Facts are fine: remaining quota, an expiry date, "paused until it resets".
+Signing in and managing an existing account is fine. So is redeeming a voucher,
+as long as it is redeemed and not bought.
+
+And the useful one, straight from the 3.1.3 preamble: *"Developers can send
+communications outside of the app to their user base about purchasing methods
+other than in-app purchase."* So the renewal reminder is an **email** sent by the
+backend. The app stays silent; the email does the talking.
+
+⚠️ The legal links resolve to `AppConfig.baseURL` + `/privacy` and `/terms`. Once
+that site has a pricing page, check those two pages do not carry a "Buy" item in
+their navigation — reviewers occasionally read that as steering.
+
+Adding StoreKit later is additive and breaks nothing. IAP was not skipped over
+the 15%; it was skipped because the tunnel is still unproven on hardware, and
+two unverified things at once is one too many.
 
 ## Naming
 
