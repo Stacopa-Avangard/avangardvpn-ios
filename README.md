@@ -1,6 +1,6 @@
-# Avangard VPN — iOS
+# AvangardVPN — iOS
 
-Native iOS client for **Avangard VPN**, mirroring the Android app
+Native iOS client for **AvangardVPN**, mirroring the Android app
 (`Stacopa-Avangard/avangardvpn-android`). Talks to the **same backend** (`Stacopa-Avangard/avangardvpn-server`,
 `https://app.avangardvpn.com`) — no backend changes needed. That backend answers to a
 second name, `vpn.stacopa-avangard.com`, which is a permanent alias onto the identical

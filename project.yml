@@ -101,7 +101,11 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Avangard VPN
+        # The product name is one closed-up word, as in ExpressVPN or NordVPN.
+        # It is also one character shorter than "Avangard VPN", which matters
+        # on the Home Screen: iOS truncates the label on a single line at around
+        # twelve characters and a space is a tempting place to break.
+        CFBundleDisplayName: AvangardVPN
         # Pinned rather than left to actool, because on Xcode 26 actool does not
         # write it where App Store Connect looks. CI dumped the built plist: the
         # catalog compiles, AppIcon60x60@2x.png is emplaced, and the key appears
@@ -260,6 +264,10 @@ targets:
     info:
       path: App/DeviceTest-Info.plist
       properties:
+        # Deliberately NOT "AvangardVPN Dev". The whole point of this target is
+        # being unmistakable next to the real app on the same phone, and the
+        # branded spelling truncates to "AvangardVPN…" on the Home Screen —
+        # which is exactly the confusion this name exists to prevent.
         CFBundleDisplayName: Avangard Dev
         # Pinned rather than left to actool, because on Xcode 26 actool does not
         # write it where App Store Connect looks. CI dumped the built plist: the
@@ -339,7 +347,7 @@ targets:
     info:
       path: Tunnel/Info.plist
       properties:
-        CFBundleDisplayName: Avangard Tunnel
+        CFBundleDisplayName: AvangardVPN Tunnel
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
