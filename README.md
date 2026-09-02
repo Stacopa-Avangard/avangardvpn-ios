@@ -139,6 +139,102 @@ to the scheme's environment variables (Product → Scheme → Edit Scheme → Ru
 Arguments) with the phone on the same Wi-Fi. That variable is DEBUG-only and
 compiled out of Release builds.
 
+## TestFlight (the Mac-free path)
+
+`.github/workflows/ios-release.yml` builds a signed `.ipa` on a macOS runner and
+uploads it to TestFlight. **Nobody needs a Mac** — but a physical iPhone is not
+optional: a packet-tunnel extension cannot run in the Simulator, so TestFlight is
+the only way to watch the tunnel actually come up.
+
+Internal testers need no Beta App Review, so an uploaded build is installable
+within minutes.
+
+Every step below can be done from Windows (WSL or Git Bash). **Do not paste any
+of these values into a chat, a commit, or an issue** — `gh secret set` reads from
+a file so the value never reaches your shell history either.
+
+### 1. Distribution certificate
+
+Apple normally has you make this in Keychain Access. `openssl` does the same job:
+
+```bash
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout ios_distribution.key \
+  -out ios_distribution.csr \
+  -subj "/emailAddress=you@example.com/CN=PT Stacopa Avangard Raya/C=ID"
+```
+
+Upload `ios_distribution.csr` at **Certificates, Identifiers & Profiles →
+Certificates → + → Apple Distribution**, then download the `.cer` and convert:
+
+```bash
+openssl x509 -in distribution.cer -inform DER -out distribution.pem -outform PEM
+openssl pkcs12 -export -legacy \
+  -inkey ios_distribution.key -in distribution.pem -out distribution.p12
+base64 -w0 distribution.p12 > distribution.p12.base64
+```
+
+⚠️ **`-legacy` is load-bearing.** OpenSSL 3 defaults to an AES-256 PKCS#12 that
+macOS `security import` cannot read, and it fails with a MAC-verification error
+that reads like a wrong password. `-legacy` writes the older format macOS
+accepts.
+
+Keep `ios_distribution.key` somewhere safe and out of the repo. Losing it means
+revoking the certificate and starting over; Apple allows only a few at a time.
+
+### 2. App Store Connect API key
+
+**Users and Access → Integrations → App Store Connect API → +**, role **App
+Manager** (Admin also works). Note the **Key ID** and the **Issuer ID**, and
+download the `.p8` — App Store Connect lets you download it exactly once.
+
+```bash
+base64 -w0 AuthKey_XXXXXXXXXX.p8 > asc_key.base64
+```
+
+### 3. Repository secrets
+
+```bash
+R=Stacopa-Avangard/avangardvpn-ios
+gh secret set IOS_DIST_CERT_P12_BASE64 -R $R < distribution.p12.base64
+gh secret set ASC_API_KEY_P8_BASE64    -R $R < asc_key.base64
+gh secret set IOS_DIST_CERT_PASSWORD   -R $R   # the -export password from step 1
+gh secret set ASC_API_KEY_ID           -R $R
+gh secret set ASC_API_ISSUER_ID        -R $R
+```
+
+Then delete the local `.p12`, `.base64` and `.p8` files.
+
+### 4. The app record
+
+**App Store Connect → Apps → + → New App**: iOS, bundle ID `com.avangard.vpn`,
+any SKU. The upload has nowhere to land without it.
+
+⚠️ The App Store **name** is globally unique across all of Apple's catalogue, so
+it is the one field that can be refused. It is independent of
+`CFBundleDisplayName` and can be changed later.
+
+### 5. Ship it
+
+Actions → **TestFlight** → *Run workflow*, or push a `v*` tag.
+
+The workflow rejects a run with missing secrets by name rather than failing
+somewhere inside `xcodebuild`, and it unpacks the exported `.ipa` to assert the
+privacy manifests, the icon key and the export-compliance key are really in it —
+those three come back from App Store Connect as an email minutes after an upload,
+which is a slow way to learn about a packaging mistake.
+
+Afterwards, in App Store Connect: answer the **export compliance** questionnaire
+(see [above](#itsappusesnonexemptencryption-true)), then **TestFlight → Internal
+Testing**, add yourself, and install from the TestFlight app on the iPhone.
+
+### Cost
+
+A run is roughly **130 minutes of Actions quota** — macOS runners bill at a 10x
+multiplier, against 2,000 free minutes a month on the org's plan. Roughly fifteen
+cold runs a month. That is why this workflow is manual and tag-driven rather than
+running on every push.
+
 ## Icon
 
 `App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`, generated
@@ -329,9 +425,11 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
       assigns a v6 address. On-demand is deliberately off (see
       `VPNConfiguration.apply`): it is a product decision on a metered plan, and
       it would reconnect after a user had deliberately disconnected.
-- [ ] **P6** — TestFlight distribution. Gated on the enrolment, and on
-      answering App Store Connect's export questionnaire — see
-      [`ITSAppUsesNonExemptEncryption`](#itsappusesnonexemptencryption-true).
+- [ ] **P6** — TestFlight distribution. The pipeline exists
+      (`.github/workflows/ios-release.yml`, see
+      [TestFlight](#testflight-the-mac-free-path)); what is left is the five
+      repository secrets, the App Store Connect app record, and the export
+      questionnaire. No Mac required — an iPhone is.
 
 ### Still missing, and why it matters
 
