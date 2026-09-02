@@ -170,19 +170,19 @@ jobs:
             echo "::error::ITSAppUsesNonExemptEncryption absent - every build lands in Missing Compliance"; exit 1
           fi
 
-          # Icon: diagnostic for one run, then this tightens into a hard check.
-          # The rasterised icons are provably in the bundle, but CFBundleIconName
-          # -- the key ITMS-90713 is actually about -- did not survive into the
-          # processed Info.plist on Xcode 26. Printing what IS there is the only
-          # way to tell an Xcode-version quirk from a real packaging bug.
-          echo "--- icon files in bundle ---"
-          ls "$APP" | grep -i appicon || echo "(none)"
-          echo "--- icon keys in Info.plist ---"
-          plutil -p "$APP/Info.plist" | grep -iE 'icon' || echo "(none)"
-          echo "--- CFBundleIconName ---"
-          plutil -extract CFBundleIconName raw "$APP/Info.plist" || echo "(absent)"
+          # ITMS-90713 is about the TOP-LEVEL CFBundleIconName, and on Xcode 26
+          # actool does not write one: it compiles the catalog, emplaces
+          # AppIcon60x60@2x.png, and puts the key only inside
+          # CFBundleIcons > CFBundlePrimaryIcon. project.yml pins the top-level
+          # key for that reason -- this is the check that keeps it pinned.
+          if ! plutil -extract CFBundleIconName raw "$APP/Info.plist"; then
+            echo "::error::no top-level CFBundleIconName (ITMS-90713)"
+            echo "icon files present:"; ls "$APP" | grep -i appicon || echo "  (none - the catalog did not compile)"
+            echo "icon keys in the plist:"; plutil -p "$APP/Info.plist" | grep -iE 'icon' || echo "  (none)"
+            exit 1
+          fi
 
-          echo "OK: privacy manifests (app + extension), export compliance"
+          echo "OK: privacy manifests (app + extension), export compliance, icon"
 
       - name: Build device-test target (unsigned)
         # The free-Apple-ID target shares App/Sources with the production app but

@@ -158,6 +158,13 @@ get wrong:
 The shield is a different mark and is not the app icon on either platform: it
 is the splash and the sign-in screen (`SplashView`, `ShieldMark`).
 
+One thing the catalog does **not** do on its own, found by the CI check added
+alongside the privacy manifests: on Xcode 26 actool writes `CFBundleIconName`
+only inside `CFBundleIcons` > `CFBundlePrimaryIcon` and leaves the **top level**
+empty — and the top-level key is the one **ITMS-90713** is about. `project.yml`
+pins it explicitly on both app targets. Keep its value equal to
+`ASSETCATALOG_COMPILER_APPICON_NAME`.
+
 ## Privacy manifest and export compliance
 
 App Store requirements that say nothing about how the app behaves and everything

@@ -102,6 +102,17 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Avangard VPN
+        # Pinned rather than left to actool, because on Xcode 26 actool does not
+        # write it where App Store Connect looks. CI dumped the built plist: the
+        # catalog compiles, AppIcon60x60@2x.png is emplaced, and the key appears
+        # as CFBundleIcons > CFBundlePrimaryIcon > CFBundleIconName — with the
+        # TOP LEVEL empty. ITMS-90713 is about the top-level key.
+        #
+        # Whether Apple's current validator still insists on it is not something
+        # this repo can test without an upload, and one line costs nothing next
+        # to a rejected build. The value must stay equal to
+        # ASSETCATALOG_COMPILER_APPICON_NAME below.
+        CFBundleIconName: AppIcon
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -231,6 +242,17 @@ targets:
       path: App/DeviceTest-Info.plist
       properties:
         CFBundleDisplayName: Avangard Dev
+        # Pinned rather than left to actool, because on Xcode 26 actool does not
+        # write it where App Store Connect looks. CI dumped the built plist: the
+        # catalog compiles, AppIcon60x60@2x.png is emplaced, and the key appears
+        # as CFBundleIcons > CFBundlePrimaryIcon > CFBundleIconName — with the
+        # TOP LEVEL empty. ITMS-90713 is about the top-level key.
+        #
+        # Whether Apple's current validator still insists on it is not something
+        # this repo can test without an upload, and one line costs nothing next
+        # to a rejected build. The value must stay equal to
+        # ASSETCATALOG_COMPILER_APPICON_NAME below.
+        CFBundleIconName: AppIcon
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
