@@ -30,7 +30,13 @@ Three targets in one Xcode project (defined by [`project.yml`](project.yml), Xco
   else was built so it could land without waiting on it.
 - App IDs + capabilities: **Network Extensions** (packet-tunnel-provider) + **App Groups** on both bundle IDs.
 - Signing via `fastlane match` (for CI) or Xcode automatic signing (local).
-- App icon: present, see [Icon](#icon).
+
+Three upload requirements are already met and needed **none** of the above —
+app icon (see [Icon](#icon)), privacy manifest, and the export-compliance
+declaration (both under
+[Privacy manifest and export compliance](#privacy-manifest-and-export-compliance)).
+That last one leaves a **filing** open, which is paperwork rather than code and
+can start today.
 
 Everything through P2 (and the UI work in P4) needs none of this — it builds and
 tests on the Simulator unsigned.
@@ -152,6 +158,66 @@ get wrong:
 The shield is a different mark and is not the app icon on either platform: it
 is the splash and the sign-in screen (`SplashView`, `ShieldMark`).
 
+One thing the catalog does **not** do on its own, found by the CI check added
+alongside the privacy manifests: on Xcode 26 actool writes `CFBundleIconName`
+only inside `CFBundleIcons` > `CFBundlePrimaryIcon` and leaves the **top level**
+empty — and the top-level key is the one **ITMS-90713** is about. `project.yml`
+pins it explicitly on both app targets. Keep its value equal to
+`ASSETCATALOG_COMPILER_APPICON_NAME`.
+
+## Privacy manifest and export compliance
+
+App Store requirements that say nothing about how the app behaves and everything
+about whether a build can be uploaded at all. Both were done without an Apple
+account; neither was ever waiting on the enrolment.
+
+### `PrivacyInfo.xcprivacy` — one per bundle, not one per project
+
+- [`App/Resources/PrivacyInfo.xcprivacy`](App/Resources/PrivacyInfo.xcprivacy)
+- [`Tunnel/Resources/PrivacyInfo.xcprivacy`](Tunnel/Resources/PrivacyInfo.xcprivacy)
+
+Mandatory since May 2024, and its absence is not a warning: App Store Connect
+answers the upload with **ITMS-91053** and the build never becomes submittable.
+
+Two files, because Apple scans each **binary** and the two give different
+answers:
+
+| | App | Tunnel extension |
+|---|---|---|
+| Collects | email, account id, device UUID — all linked to the user, none for tracking | **nothing** |
+| Required-reason API | `UserDefaults` (`CA92.1`) — the active region code | system boot time (`35F9.1`) |
+
+The extension's is the surprising one. Nothing in `Tunnel/Sources` asks for the
+boot time — **wireguard-go** does. Its handshake and keepalive timers run on a
+monotonic clock, and the Go runtime's `nanotime` on Darwin is
+`mach_absolute_time`. Apple's scanner reads symbols, not intent, so grepping our
+Swift and finding nothing is not evidence that the declaration is stale.
+
+Deliberately **not** declared: `deviceName`. On iOS 16+ — and 16.0 is the floor
+here — `UIDevice.current.name` returns the model string without a special
+entitlement, so what reaches the server is "iPhone" and it identifies nobody.
+
+### `ITSAppUsesNonExemptEncryption: true`
+
+Set in [`project.yml`](project.yml) on the app target. **True is the accurate
+answer, not the cautious one.** The exemption apps normally claim is "only uses
+encryption available in the operating system", which fits an app whose crypto is
+HTTPS through `URLSession`. It does not fit one that embeds wireguard-go's own
+ChaCha20-Poly1305, Curve25519 and BLAKE2s. Nor do the others — authentication,
+DRM, medical. A VPN is the textbook non-exempt case.
+
+⚠️ **The declaration opens an obligation rather than closing one.** Before a
+TestFlight build can reach a tester, someone has to file the annual
+self-classification report for **ECCN 5D002** under License Exception ENC
+**§740.17(b)(1)** with BIS and the NSA ENC coordinator, then answer App Store
+Connect's export questionnaire (the separate France question included). US
+export rules apply because the App Store distributes from the US — an Indonesian
+developer account does not change that. Once an ERN/CCATS code exists, adding it
+as `ITSEncryptionExportComplianceCode` retires the questionnaire as well.
+
+`AvangardVPNDeviceTest` carries neither the key nor the obligation: it is a
+free-signed local build that never reaches App Store Connect.
+
 ## Design
 
 The interface is a **port of the Android client's design system**, not a
@@ -243,13 +309,26 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
       assigns a v6 address. On-demand is deliberately off (see
       `VPNConfiguration.apply`): it is a product decision on a metered plan, and
       it would reconnect after a user had deliberately disconnected.
-- [ ] **P6** — TestFlight distribution
+- [ ] **P6** — TestFlight distribution. Gated on the enrolment **and** on the
+      export-compliance filing above — the second is paperwork, not code, and
+      nobody has started it.
 
 ### Still missing, and why it matters
 
 - **Nothing blocks review any more on the account side**: in-app account
   deletion (Guideline 5.1.1(v)), sign-in by code for the reviewer, and in-app
   privacy/terms links all landed with P4.5.
-- The **paid Apple Developer Program enrolment** is the remaining gate. It
-  blocks P3-on-hardware, P5 and P6, and there is no workaround — a free Apple ID
-  cannot carry `packet-tunnel-provider`.
+- **Nothing blocks upload any more either**: the app icon landed with P4.5, and
+  the privacy manifest and export-compliance declaration with the PR after it.
+  All three answer an upload *rejection* rather than a review note, and none of
+  them needed an Apple account — which is precisely why the earlier wording here
+  ("the enrolment is the remaining gate") was wrong and worth correcting: it
+  would have let two of them sit unnoticed until a build bounced.
+- **One task is open that no amount of code will close.** Declaring non-exempt
+  encryption commits us to the annual ECCN 5D002 self-classification filing
+  before TestFlight can reach a tester. Nobody has filed it. It is independent
+  of the enrolment and can proceed in parallel — see
+  [Privacy manifest and export compliance](#privacy-manifest-and-export-compliance).
+- The **paid Apple Developer Program enrolment** is the remaining *engineering*
+  gate. It blocks P3-on-hardware, P5 and P6, and there is no workaround — a free
+  Apple ID cannot carry `packet-tunnel-provider`.
