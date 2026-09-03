@@ -16,7 +16,9 @@ Three targets in one XcodeGen project: the app, the `NEPacketTunnelProvider` ext
 - Both App IDs registered with **Network Extensions + App Groups**: `com.avangard.vpn` and `com.avangard.vpn.network-extension`, both bound to App Group `group.com.avangard.vpn`.
 - P0–P4.5 done. App icon, both privacy manifests and the export declaration are in and asserted by CI on the built `.app`.
 - **No In-App Purchase** — decided 2026-09-02. The app sells nothing and may not promote what the website sells; see § *Monetisation* below before touching the Account or Home screens.
-- ⬜ **The tunnel has never been run on a phone.** Everything is code-complete and CI-green, and no human has watched it come up. The orb's amber and emerald phases are pinned by tests, not by observation. Treat the connect path as unverified, and do not write anything that implies otherwise.
+- ✅ **The tunnel ran on a phone, 2026-09-03.** iPhone 12, iOS 26.6, region Singapore. Verified from the outside rather than from the app's own UI: iOS system daemons (`cloudd`, `apsd`, `featureaccessd`) routed over `utun5` with *completed* HTTPS transactions (`err=F`, real response bodies), and the phone's public IP was Singapore. Build `1.0 (1)` is on TestFlight.
+- ⬜ **Still unverified: the tunnel on a *distribution* build.** What ran was a development build. TestFlight ships `get-task-allow = false` and an Apple Distribution signature, and entitlement failures of that exact class do not show up in development builds — the Keychain bug of 2026-09-02 was one. Do not write anything that implies the distribution path is proven.
+- ⬜ **Reviewer sign-in credentials are unknown.** `POST /auth/demo-login` is live in production (probed 2026-09-03: answers `401`; an unconfigured deployment answers `404`), but the email and code are server configuration nobody here has. External testing and App Store review both need them.
 
 ## ⛔ Four things that must not be "fixed"
 
@@ -111,8 +113,10 @@ that site has a pricing page, check those two pages do not carry a "Buy" item in
 their navigation — reviewers occasionally read that as steering.
 
 Adding StoreKit later is additive and breaks nothing. IAP was not skipped over
-the 15%; it was skipped because the tunnel is still unproven on hardware, and
-two unverified things at once is one too many.
+the 15%; it was skipped because the tunnel was unproven on hardware at the time,
+and two unverified things at once is one too many. The tunnel is proven now, so
+that particular reason has expired — the monetisation reasoning above has not,
+and it is the one that governs.
 
 ## Naming
 
