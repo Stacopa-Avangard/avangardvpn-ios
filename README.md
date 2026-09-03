@@ -133,8 +133,9 @@ rest of this file.
 | First `.ipa` | ✅ 2.0 MB, signed for distribution, every CI assertion green |
 | App Store Connect app record | ✅ created; availability restricted to **Indonesia only** |
 | TestFlight build `1.0 (1)` | ✅ uploaded 2026-09-03, compliance answered, **Ready to Submit** |
-| Internal testers | ⬜ none added yet |
-| Tunnel on a **distribution** build | ⬜ unverified — see below |
+| Internal testers | ✅ **already there** — the group "Internal" has a tester whose state is `INSTALLED`, so a distribution build is on a device. Verified against the API 2026-09-04; the earlier "none added yet" here was simply never checked |
+| Tunnel on a **distribution** build | ⬜ unverified — see below. Note this needs no new upload: build `1.0 (1)` is `IN_BETA_TESTING` until **2026-12-01** |
+| External TestFlight | ⛔ `externalBuildState=BETA_REJECTED`, with a `betaAppReviewSubmissions` record submitted 2026-09-03 11:06 WIB. Nobody remembers submitting it, no external group exists, and the API exposes neither who submitted nor why it was refused — that lives only in Resolution Center. It blocks nothing: internal testing is unaffected, and the state is per build |
 
 ### What the first Mac session found — 2026-09-03
 
@@ -416,20 +417,33 @@ Every step below can be done from Windows (WSL or Git Bash). **Do not paste any
 of these values into a chat, a commit, or an issue** — `gh secret set` reads from
 a file so the value never reaches your shell history either.
 
-**Where this actually stands, 2026-09-03.** The first build reached TestFlight
+**Where this actually stands, 2026-09-04.** The first build reached TestFlight
 by hand from the Mac (Xcode Organizer), not through this pipeline — which has
-still never run:
+still never run, and now cannot:
 
 | Step | |
 |---|---|
 | 1. Distribution certificate | ✅ exists, created through Xcode on the Mac. The `.p12` for CI has **not** been exported yet |
-| 2. App Store Connect API key | ⬜ **not created** — this is the one blocker for the whole pipeline |
-| 3. Repository secrets | ⬜ none set. `gh secret list` is empty |
+| 2. App Store Connect API key | ✅ **created** — key `<ASC Key ID>`, App Manager. The `.p8` lives outside this repo and is never committed |
+| 3. Repository secrets | ⬜ none set — **and deliberately so**, see below |
 | 4. The app record | ✅ created, Indonesia-only |
 | 5. Ship it | ⬜ never run |
 
-So step 2 is the thing to do first: one key yields all three ASC secrets, and
-the certificate for the other two is already in the Mac's keychain.
+⛔ **GitHub Actions has no included minutes left.** Every run since 2026-09-03
+dies in 3 seconds without starting:
+
+    The job was not started because recent account payments have failed
+    or your spending limit needs to be increased.
+
+So setting the five secrets buys nothing until billing is fixed. The pipeline is
+not broken; it is unfunded. Until then the release path is **local on a Mac**,
+which needs no Actions at all: `xcodebuild archive` → `-exportArchive` (with
+`PATH="/usr/bin:$PATH"` on that step) → `xcrun altool --upload-app`, all three
+authenticated with the same `.p8` via `-authenticationKeyPath` / `--apiKey`.
+
+The key is also what `Tools/asc.rb` uses to read and write App Store Connect
+metadata from a terminal — see [App Store Connect from a
+terminal](#app-store-connect-from-a-terminal).
 
 ### 1. Distribution certificate
 
@@ -512,6 +526,90 @@ A run is roughly **130 minutes of Actions quota** — macOS runners bill at a 10
 multiplier, against 2,000 free minutes a month on the org's plan. Roughly fifteen
 cold runs a month. That is why this workflow is manual and tag-driven rather than
 running on every push.
+
+## App Store Connect from a terminal
+
+`Tools/asc.rb` signs an ES256 JWT with the App Store Connect API key and calls
+the REST API. It exists because the console is slow to audit and because the CI
+that used to do this cannot run — see [TestFlight](#testflight-the-mac-free-path).
+
+```bash
+export ASC_KEY_PATH=/path/to/AuthKey_<ASC Key ID>.p8   # never in this repo
+export ASC_KEY_ID=<ASC Key ID>
+export ASC_ISSUER_ID=…                               # Users and Access → Integrations
+export ASC_APP_ID=6808064676
+
+ruby Tools/asc.rb "/v1/apps/$ASC_APP_ID"                     # read
+ruby Tools/asc.rb "/v1/appInfos/<id>" PATCH '{"data":…}'     # write
+```
+
+Three things that cost time to find out:
+
+- **PyJWT and `cryptography` are not installed** in macOS's system python3, so
+  the signer is Ruby, whose stdlib `openssl` is. OpenSSL emits an ECDSA
+  signature in **DER**; a JWT wants raw `r||s`, 64 bytes. `asc.rb` unpacks it
+  with `OpenSSL::ASN1.decode` — a JWT that "looks right" but fails with a 401 is
+  usually this.
+- **`relationships.*.data` is empty unless you ask for it.** `GET /v1/appInfos/<id>`
+  reports no category even when one is set; `?include=primaryCategory` reports
+  it. A PATCH that returns 200 has worked — verify with `include`, not without.
+- **macOS `base64` rejects a filename argument.** `base64 -d file.b64 > out` is
+  GNU syntax; here it prints `invalid argument` and writes nothing, while the
+  shell's `>` still creates the file. The result is a 0-byte key that looks like
+  success. Use `base64 -d < file.b64` and check with `openssl pkey -in … -noout`.
+
+### Metadata state, 2026-09-04
+
+Filled through the API, all still `PREPARE_FOR_SUBMISSION` — nothing has been
+submitted, and `GET …/appStoreVersionSubmission` returns 404:
+
+| Field | |
+|---|---|
+| `privacyPolicyUrl` | ✅ `https://app.avangardvpn.com/privacy`. ⚠️ `avangardvpn.com/privacy` is **404** — only the `app.` host serves it, and that is the host the app itself links to |
+| `primaryCategory` | ✅ `UTILITIES`. Of 100 VPN apps on the Indonesian App Store the split is 46 Utilities / 44 Productivity, so there is no "correct" answer from population — but NordVPN and Proton VPN both sit in Utilities, while the Productivity side is mostly free "Fast VPN Proxy" listings |
+| `ageRating` | ✅ `FOUR_PLUS`. Everything `NONE`/`false`, including `unrestrictedWebAccess` — this app embeds no browser and renders no arbitrary web content. `unrestrictedWebAccess` and `ageAssurance` are **required** and are **booleans**; omitting either fails the PATCH with `ENTITY_ERROR.ATTRIBUTE.REQUIRED` |
+| description | ✅ reworded. Two lines promised bypassing local network restrictions and "disguising" browsing on office and campus networks. Against a `4+` declaration that says the opposite, the declaration is what loses |
+| demo account | ⬜ **still empty** — `demoAccountRequired=false` with no username or password, on an app that cannot be opened without signing in. The backend's `POST /auth/demo-login` is configured and `LoginView` already exposes "Have a sign-in code?"; only the code itself is missing, and it is deliberately not in this repo |
+
+⚠️ Build `1.0 (1)` carries none of this app's newer screens and expires
+**2026-12-01**. Whatever is submitted for review must be a build that contains
+the data disclosure screen.
+
+## Debugging on a real device from a Mac
+
+Measured on an iPhone 12 / iOS 26.6.1 / Xcode 26 on 2026-09-04. The short
+version: you can install, launch and read files, but you cannot see the screen
+and you cannot read the app's own log.
+
+| Need | What works |
+|---|---|
+| Build, install, launch, uninstall | `devicectl` — over USB **or** Wi-Fi |
+| Read files out of the app container | `devicectl device copy from --domain-type appDataContainer --domain-identifier com.avangard.vpn --source Library/Preferences/com.avangard.vpn.plist` — no Developer Disk Image needed, and the way to prove a `UserDefaults` write actually landed |
+| System daemon logs | `idevicesyslog -u <UDID>` — needs USB. 15,000 lines in 4 seconds |
+| See the screen | ⛔ `idevicescreenshot` fails with `Could not start screenshotr service: Invalid service`. libimobiledevice 1.4.0 cannot mount the personalised DDI iOS 26 uses. Workaround: press **Side + Volume Up** on the phone and pull the PNG from `/DCIM/100APPLE` with `afcclient`, diffing the listing to find it. The files are `.PNG`, **uppercase** |
+| The app's own `Logger` lines | ⛔ nothing. `os_log` is not carried by the legacy syslog relay — not for the tunnel extension, and not for the app either. 0 of 6,231 captured lines mentioned the app |
+| Tap the screen | ⛔ no path. There is no XCUITest target in this project |
+
+⚠️ **`system_profiler SPUSBDataType` does not exist on macOS 26.** It was renamed
+`SPUSBHostDataType`, and the old name exits quietly with no output — which reads
+exactly like "no device attached". The earlier note in this file blaming Apple
+for that silence was wrong. Use `idevice_id -l` (empty means no USB) and
+`transportType` from `devicectl list devices --json-output`.
+
+⛔ **gstack's `/ios-qa` DebugBridge does not fit this project**, checked again
+against gstack 1.79.0.0. Its generator (`scripts/gen-accessors.ts:119`) matches
+`@Observable` with a regex and nothing else; `AuthStore`, `ProvisioningStore` and
+`TunnelStore` are all `ObservableObject` + `@Published`, so it emits zero
+accessors. It also assumes a SwiftPM app manifest, and this app is an
+XcodeGen-generated `.xcodeproj`. Converting to `@Observable` would raise the
+deployment target from **16.0 to 17**, which is a product decision, not a
+testing one.
+
+⚠️ `xcodebuild test -scheme AvangardVPN` fails with *"Scheme AvangardVPN is not
+currently configured for the test action"*. The test action lives on the
+`AvangardVPNDeviceTest` scheme, whose bundle id `com.avangard.vpn.devtest` was
+built for a free Personal Team — running it under the organisation team would
+register a new App ID on the paid account.
 
 ## Icon
 
