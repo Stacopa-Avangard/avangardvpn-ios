@@ -165,10 +165,33 @@ targets:
         # still held to full ATS requirements.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # Export compliance, answered here so App Store Connect stops asking it
-        # per build. TRUE is not the cautious answer, it is the only accurate
-        # one — and getting it wrong is a false declaration to a US government
-        # process, not a checkbox.
+        # ⚠️ ITSAppUsesNonExemptEncryption is deliberately ABSENT, and the
+        # answer it used to carry is still TRUE. Only the place it is declared
+        # changed.
+        #
+        # It lived here so App Store Connect would stop asking per build. App
+        # Store Connect rejects that:
+        #
+        #   ITMS-90592: Invalid Export Compliance Code. The export compliance
+        #   key value [] in the app's Info.plist doesn't match the key value of
+        #   the app's export compliance documentation.
+        #
+        # YES in the plist is a claim that documentation is already on file,
+        # and Apple then wants ITSEncryptionExportComplianceCode alongside it.
+        # That code only exists once App Encryption Documentation is filed in
+        # App Store Connect -- which for this app is not filed, and per the
+        # CCATS note below probably never needs to be. With no code to pair it
+        # with, the key cannot stay.
+        #
+        # So the declaration moves to App Store Connect's questionnaire, where
+        # the answer is the same: uses non-exempt encryption, qualifies for
+        # exemption as industry-standard algorithms not provided by the OS. It
+        # is asked once and can be applied to later builds.
+        #
+        # Everything below is why TRUE is the accurate answer. It has not
+        # changed and is the reason not to reach for the easy NO. Getting it
+        # wrong is a false declaration to a US government process, not a
+        # checkbox.
         #
         # The exemption people reach for is "only uses encryption available in
         # the operating system". That fits an app whose crypto is HTTPS through
@@ -205,7 +228,8 @@ targets:
         # The CCATS row is the one judgement worth a professional opinion: if
         # anyone reads wireguard-go's protocol as proprietary rather than
         # standard, a CCATS is a BIS submission with a waiting period attached.
-        ITSAppUsesNonExemptEncryption: true
+        # That is also the only path that would produce a compliance code, and
+        # so the only thing that would let the key come back here.
     # ⚠️ The app carries the SAME networkextension entitlement as the extension
     # it embeds, and that is not a copy-paste slip. NETunnelProviderManager —
     # the API the app uses to save the VPN configuration and start the tunnel —
@@ -338,9 +362,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Repeated from the project-level settings on purpose; XcodeGen's own
-        # target-level "1,2" wins otherwise. The reasoning is up there.
-        TARGETED_DEVICE_FAMILY: "1"
         # The Swift module keeps the production name even though the product
         # and bundle id do not. The tests say `@testable import AvangardVPN`,
         # and they are testing exactly these sources — this target compiles the
