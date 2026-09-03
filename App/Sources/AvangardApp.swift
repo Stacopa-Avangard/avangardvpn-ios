@@ -29,6 +29,9 @@ struct AvangardVPNApp: App {
 struct RootView: View {
     @EnvironmentObject private var auth: AuthStore
 
+    /// Read here rather than inside the gate so agreeing re-renders this switch.
+    @AppStorage(DataDisclosure.storageKey) private var disclosureAccepted = 0
+
     var body: some View {
         switch auth.state {
         case .restoring:
@@ -40,7 +43,17 @@ struct RootView: View {
                 // Nothing is connected before sign-in, so the wash is fixed at
                 // the idle accent.
                 AmbientWash(accent: ConnPhase.off.accent())
-                LoginView()
+
+                // Guideline 5.4 wants the data declaration on an app screen
+                // "prior to any user action to ... use the service", and the
+                // first action here — typing an email and asking for a link —
+                // already sends data. So the gate sits in front of LoginView
+                // rather than in front of Connect. See DataDisclosureView.
+                if disclosureAccepted >= DataDisclosure.version {
+                    LoginView()
+                } else {
+                    DataDisclosureView()
+                }
             }
         case let .signedIn(user):
             SignedInShell(user: user)
