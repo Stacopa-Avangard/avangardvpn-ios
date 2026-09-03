@@ -5,14 +5,18 @@
 //  address, the PSK); the private key never leaves this device, so the complete
 //  config only ever exists here.
 //
-//  ⚠️ This header used to say the wg-quick output was "what WireGuardKit's
-//  parser consumes in P3". That was wrong, and P3 found out: the wg-quick
-//  parser lives in wireguard-apple's WireGuardApp target, not in the
-//  `WireGuardKit` library product, so nothing in the extension can read it.
-//  The tunnel is handed a `TunnelProfile` instead — structured values, no text
-//  format in the middle. `wgQuickConfig` stays because the config sheet in
-//  HomeView shows it to the user, which is a genuine use; it is simply not the
-//  transport.
+//  ⚠️ There is deliberately no wg-quick text form here. This file used to
+//  build one, on the belief it was "what WireGuardKit's parser consumes". That
+//  was wrong — the wg-quick parser lives in wireguard-apple's WireGuardApp
+//  target, not in the `WireGuardKit` library product, so nothing in the
+//  extension could ever read it. The tunnel is handed a `TunnelProfile`:
+//  structured values, no text format in the middle.
+//
+//  It survived that discovery only because the account screen displayed it.
+//  That panel is gone (it read as "this is WireGuard", which is not how the
+//  product presents itself), and with it the last reason to assemble a private
+//  key into plaintext anywhere in this app. Don't reintroduce one: the profile
+//  path already carries every field, `PersistentKeepalive` included.
 //
 import Foundation
 
@@ -55,7 +59,7 @@ struct TunnelConfig: Equatable {
 
     /// What actually reaches the tunnel extension, via
     /// `NETunnelProviderProtocol.providerConfiguration`. Same values as
-    /// `wgQuickConfig` below, minus the text format — see TunnelProfile.swift.
+    /// Everything the extension needs — see TunnelProfile.swift.
     var profile: TunnelProfile {
         TunnelProfile(
             privateKey: privateKey,
@@ -66,32 +70,6 @@ struct TunnelConfig: Equatable {
             allowedIps: allowedIps,
             endpoint: endpoint
         )
-    }
-
-    /// `wg-quick` INI form. Shown to the user in the config sheet; NOT the
-    /// transport to the extension (the header explains why).
-    var wgQuickConfig: String {
-        var lines = [
-            "[Interface]",
-            "PrivateKey = \(privateKey)",
-            "Address = \(addresses.joined(separator: ", "))",
-        ]
-        if !dns.isEmpty {
-            lines.append("DNS = \(dns.joined(separator: ", "))")
-        }
-        lines.append(contentsOf: [
-            "",
-            "[Peer]",
-            "PublicKey = \(serverPublicKey)",
-            "PresharedKey = \(presharedKey)",
-            "AllowedIPs = \(allowedIps.joined(separator: ", "))",
-            "Endpoint = \(endpoint)",
-            // Mobile clients sit behind NAT that drops idle UDP mappings; this
-            // keeps the path open so the server can reach the peer again after
-            // an idle stretch.
-            "PersistentKeepalive = 25",
-        ])
-        return lines.joined(separator: "\n")
     }
 
     private static func split(_ value: String) -> [String] {

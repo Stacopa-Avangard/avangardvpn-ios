@@ -336,11 +336,20 @@ struct AccountView: View {
 
 // MARK: - Connection details
 
-/// What the tunnel will actually use. Kept visible because a wrong route or a
-/// missing IPv6 address is invisible until traffic silently breaks.
+/// The address this device holds on the tunnel, and nothing else.
+///
+/// Endpoint, routes, DNS and the wg-quick dump used to sit here too. They named
+/// the transport plainly enough to read as "this is WireGuard", which is not
+/// how the product presents itself, so they are gone. Nothing about the tunnel
+/// changed — only what the screen admits to.
+///
+/// ⚠️ An "IPv4 only" notice went with them. It was the one place a user could
+/// see that a region has no v6 address assigned — a condition that black-holes
+/// v6 traffic silently: no error, just some sites that never load. The
+/// condition is not gone, only unreported. If it ever bites, the truth is
+/// `allowedIps` in TunnelConfig, not this view.
 struct ConnectionDetailsCard: View {
     let config: TunnelConfig
-    @State private var expanded = false
 
     var body: some View {
         Card {
@@ -348,27 +357,6 @@ struct ConnectionDetailsCard: View {
                 CardHead(title: "Connection", aside: "this device")
 
                 detail("Address", config.addresses.joined(separator: ", "))
-                detail("Endpoint", config.endpoint)
-                detail("Routes", config.allowedIps.joined(separator: ", "))
-                detail("DNS", config.dns.joined(separator: ", "))
-
-                if !config.allowedIps.contains(where: { $0.contains(":") }) {
-                    Label("IPv4 only — this region has no IPv6 assigned", systemImage: "info.circle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.faint)
-                }
-
-                DisclosureGroup("Show wg-quick config", isExpanded: $expanded) {
-                    Text(verbatim: redacted)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(.top, 8)
-                }
-                .font(.system(size: 12))
-                .tint(Theme.indigoBright)
-                .foregroundStyle(Theme.muted)
             }
         }
     }
@@ -383,13 +371,5 @@ struct ConnectionDetailsCard: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text)
         }
-    }
-
-    /// Secrets are masked. This view exists to make the config inspectable,
-    /// not to export credentials — there is no path that reveals the keys.
-    private var redacted: String {
-        config.wgQuickConfig
-            .replacingOccurrences(of: config.privateKey, with: "<private key — stays in Keychain>")
-            .replacingOccurrences(of: config.presharedKey, with: "<preshared key>")
     }
 }
