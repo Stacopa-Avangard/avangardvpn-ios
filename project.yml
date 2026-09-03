@@ -435,19 +435,22 @@ targets:
     type: ""
     platform: iOS
     legacy:
-      # `/usr/bin/env` + `make` rather than a hardcoded `/usr/bin/make` (which is
-      # what upstream's own project uses). Both work here — the probe proved
-      # /usr/bin/make exists on the runner — but env resolves make from PATH, so
-      # it also survives a Mac that has Xcode without standalone Command Line
-      # Tools.
+      # Delegated to a script because the checkout cannot be named by a fixed
+      # path: BUILD_DIR moves between `build` and `archive`, so no single
+      # `workingDirectory` expression reaches it in both, and the archive-side
+      # miss surfaces as a misleading `unable to spawn process '/usr/bin/env'`.
+      # The script's header has the two layouts and the reasoning.
       #
-      # `$(ACTION)` matches upstream and is load-bearing: the Makefile's default
-      # goal is not the library, but it defines a `build` target, and Xcode sets
-      # ACTION=build.
-      toolPath: /usr/bin/env
-      arguments: make $(ACTION)
+      # It resolves `make` from PATH rather than hardcoding /usr/bin/make (which
+      # is what upstream's own project uses), so this still works on a Mac that
+      # has Xcode without standalone Command Line Tools.
+      #
+      # `passSettings: true` is what hands BUILD_DIR and ACTION to the script.
+      # `workingDirectory` is only a guaranteed-to-exist starting point — the
+      # script cds to the checkout itself.
+      toolPath: $(SRCROOT)/Scripts/build-wireguard-go.sh
       passSettings: true
-      workingDirectory: $(BUILD_DIR)/../../SourcePackages/checkouts/wireguard-apple/Sources/WireGuardKitGo
+      workingDirectory: $(SRCROOT)
 
 # ── Schemes ────────────────────────────────────────────────────────────────
 # AvangardVPNDeviceTest gets its scheme from its own `scheme:` block above,
