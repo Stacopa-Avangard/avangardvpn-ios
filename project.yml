@@ -29,6 +29,35 @@ settings:
     DEVELOPMENT_TEAM: 8HSUX5T86H
     CODE_SIGN_STYLE: Automatic
 
+    # iPhone only. Xcode's default is "1,2", which App Store Connect rejects
+    # for this app:
+    #
+    #   ITMS-90474: The "UIInterfaceOrientationPortrait" orientations were
+    #   provided for the UISupportedInterfaceOrientations Info.plist key ...
+    #   but you need to include all of the ...
+    #
+    # An iPad build must support all four orientations, and every screen here
+    # is laid out portrait-only and has never been rendered landscape. Shipping
+    # into that rule would mean claiming a layout nobody has looked at.
+    #
+    # The direction matters: adding iPad later is a normal release, while
+    # dropping a device family after users have it is not. So this starts
+    # narrow deliberately, not as a limitation to fix.
+    #
+    # Xcode warned about this from the first build ("All interface orientations
+    # must be supported unless the app requires full screen") -- it was one
+    # warning among thousands of log lines, and only App Store Connect made it
+    # fatal.
+    #
+    # ⚠️ Setting it here is NOT enough, and the first attempt at this fix proved
+    # it: XcodeGen writes TARGETED_DEVICE_FAMILY = "1,2" into every iOS target
+    # itself, and a target-level setting beats a project-level one. The built
+    # Info.plist still said UIDeviceFamily = (1, 2). It has to be repeated in
+    # each shipping target's own `settings.base` -- see AvangardVPN and
+    # AvangardTunnel below. This line stays as the statement of intent, and so
+    # a new target does not silently inherit "1,2" with nothing to point at.
+    TARGETED_DEVICE_FAMILY: "1"
+
 # WireGuardKit — the tunnel engine. Wired in P3.
 #
 # ⚠️ This points at OUR FORK, not at WireGuard/wireguard-apple, and that is a
@@ -205,6 +234,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Repeated from the project-level settings on purpose; XcodeGen's own
+        # target-level "1,2" wins otherwise. The reasoning is up there.
+        TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - target: AvangardTunnel
         embed: true
@@ -306,6 +338,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.devtest
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Repeated from the project-level settings on purpose; XcodeGen's own
+        # target-level "1,2" wins otherwise. The reasoning is up there.
+        TARGETED_DEVICE_FAMILY: "1"
         # The Swift module keeps the production name even though the product
         # and bundle id do not. The tests say `@testable import AvangardVPN`,
         # and they are testing exactly these sources — this target compiles the
@@ -371,6 +406,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.avangard.vpn.network-extension
+        # See the app target: XcodeGen's target-level "1,2" beats the
+        # project-level setting, so the extension has to say it too.
+        TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - package: WireGuardKit
       # Ordering, not just linkage: this makes `make` run before the extension
