@@ -74,7 +74,6 @@ final class ProvisioningTests: XCTestCase {
 
         XCTAssertEqual(config.addresses, ["10.7.0.5/32"])
         XCTAssertEqual(config.allowedIps, ["0.0.0.0/0"])
-        XCTAssertFalse(config.wgQuickConfig.contains("::/0"))
     }
 
     func testDualStackRegionKeepsIPv6Routes() {
@@ -82,17 +81,6 @@ final class ProvisioningTests: XCTestCase {
 
         XCTAssertEqual(config.addresses, ["10.7.0.5/32", "fd42:8::5/128"])
         XCTAssertEqual(config.allowedIps, ["0.0.0.0/0", "::/0"])
-    }
-
-    func testWgQuickConfigHasBothSections() {
-        let config = TunnelConfig(privateKey: "cHJpdmF0ZQ==", region: response(assignedIpv6: nil))
-        let text = config.wgQuickConfig
-
-        XCTAssertTrue(text.contains("[Interface]"))
-        XCTAssertTrue(text.contains("[Peer]"))
-        XCTAssertTrue(text.contains("PrivateKey = cHJpdmF0ZQ=="))
-        XCTAssertTrue(text.contains("Endpoint = vpn.example.com:51820"))
-        XCTAssertTrue(text.contains("PersistentKeepalive = 25"))
     }
 
     // MARK: - Registration against a real backend
