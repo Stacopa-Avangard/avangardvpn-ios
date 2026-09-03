@@ -11,7 +11,12 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.0.0"
+    # "1.0", not "1.0.0" — this is the string the App Store shows, and the
+    # version record in App Store Connect is 1.0. It sat unused at 1.0.0 while
+    # XcodeGen wrote 1.0 into the plist on its own; wiring the plist to this
+    # setting woke the mismatch up, and a build stamped 1.0.0 would hang off a
+    # version that does not exist there.
+    MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
     # Apple Developer Team for PT Stacopa Avangard Raya. Enrolment was paid on
@@ -156,6 +161,24 @@ targets:
         # to a rejected build. The value must stay equal to
         # ASSETCATALOG_COMPILER_APPICON_NAME below.
         CFBundleIconName: AppIcon
+        # ⚠️ Both of these must stay as build-setting references, not numbers.
+        #
+        # XcodeGen resolves CURRENT_PROJECT_VERSION and writes the RESULT into
+        # the generated Info.plist as a literal. A literal in Info.plist beats
+        # the build setting, so `xcodebuild CURRENT_PROJECT_VERSION=2` was
+        # accepted, reported no error, and produced a build still stamped 1 —
+        # which App Store Connect rejects as a duplicate build number.
+        #
+        # That is the bug `ios-release.yml` carries too: it passes
+        # CURRENT_PROJECT_VERSION=${{ github.run_number }} and would have
+        # shipped every build as number 1. It has never run, so nothing caught
+        # it. The app and the extension must also agree — a mismatch fails the
+        # upload — which is why the same two lines appear in both targets.
+        #
+        # Written as `$(…)` the value survives into the plist and Xcode expands
+        # it at build time, so the command line finally wins.
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -414,6 +437,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: AvangardVPN Tunnel
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
