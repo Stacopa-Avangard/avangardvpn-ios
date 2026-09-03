@@ -92,14 +92,18 @@ real iPhone + signing.)
 
 ## ▶ Running it on a real iPhone (paid account) — start here
 
-⬜ **This is the one thing nobody has done yet.** The tunnel is code-complete and
-CI-green, and every release artifact is in place — but no human has watched it
-come up. Until someone does, treat the connect path as unverified.
+✅ **Done — 2026-09-03.** The tunnel came up on an iPhone 12 (iOS 26.6), region
+Singapore, and carried real traffic: iOS system daemons (`cloudd`, `apsd`,
+`featureaccessd`) routed over `utun5` with completed HTTPS transactions
+(`err=F`), and the phone's public IP was Singapore. This section is kept because
+the steps are still the steps — and because three things went wrong on the way
+that the instructions did not predict. Those are in
+[What the first Mac session found](#what-the-first-mac-session-found--2026-09-03).
 
 Self-contained on purpose: follow it top to bottom on the Mac without reading the
 rest of this file.
 
-### Where things stand — 2026-09-02
+### Where things stand — 2026-09-03
 
 | | |
 |---|---|
@@ -109,7 +113,100 @@ rest of this file.
 | App ID `com.avangard.vpn.network-extension` | ✅ same — the extension needs both too |
 | App Group `group.com.avangard.vpn` | ✅ bound to both App IDs |
 | App icon, privacy manifests, export declaration | ✅ in the repo, asserted by CI on the built `.app` |
-| **Tunnel proven on hardware** | ⬜ **no — this is the task** |
+| **Tunnel proven on hardware** | ✅ **2026-09-03** — iPhone 12, iOS 26.6, Singapore, real traffic over `utun5` |
+| Registered device | ✅ iPhone 12, UDID `<UDID iPhone — lihat catatan operator>` |
+| Apple Distribution certificate | ✅ `Apple Distribution: PT. STACOPA AVANGARD RAYA (8HSUX5T86H)`, in the Mac's login keychain |
+| First `.ipa` | ✅ 2.0 MB, signed for distribution, every CI assertion green |
+| App Store Connect app record | ✅ created; availability restricted to **Indonesia only** |
+| TestFlight build `1.0 (1)` | ✅ uploaded 2026-09-03, compliance answered, **Ready to Submit** |
+| Internal testers | ⬜ none added yet |
+| Tunnel on a **distribution** build | ⬜ unverified — see below |
+
+### What the first Mac session found — 2026-09-03
+
+Everything below was discovered by running the release path for the first time.
+Three of them are fixed in the repo; the rest is state that lives in Apple's
+systems and cannot be read from a checkout.
+
+**Three bugs that had never fired, because nothing had ever archived.**
+`ios-release.yml` is the only thing that archives, and it has never run — the
+repo holds none of its five secrets, so it fails at the credential step first.
+
+| Symptom | Real cause | Fixed in |
+|---|---|---|
+| `unable to spawn process '/usr/bin/env' (No such file or directory)` | Not a missing binary. `posix_spawn` returns ENOENT for a missing **working directory** too, and `$(BUILD_DIR)` moves between `build` and `archive` | PR #21 — `Scripts/build-wireguard-go.sh` |
+| `error: exportArchive Copy failed`, and nothing else | GNU rsync ahead of openrsync on `PATH`. The `brew install rsync` the build needs is what breaks the export | PR #21 — `PATH="/usr/bin:$PATH"` on that step |
+| `ITMS-90474` orientations, `ITMS-90592` export compliance | Both rejected the first upload. iPad needs all four orientations; `ITSAppUsesNonExemptEncryption: YES` without a compliance code is refused | PR #23 |
+
+**Three things the instructions got wrong, now corrected in place.**
+
+- `xcodebuild -allowProvisioningUpdates` does **not** register a new device. It
+  only refreshes profiles for devices already registered. Xcode.app registers;
+  the CLI does not. Register the UDID once by hand at
+  [Devices](https://developer.apple.com/account/resources/devices/list).
+- `TARGETED_DEVICE_FAMILY` at **project** level is ignored — XcodeGen writes
+  `"1,2"` into every iOS target, and target-level wins. It must be repeated in
+  each shipping target.
+- A **cable is not required** to build, install or archive. This iPhone was
+  reachable over `transportType: localNetwork` the whole morning. Check
+  `xcrun devicectl list devices --json-output`, not `xctrace list devices`
+  (which reported "Offline" while the device was working) and not
+  `system_profiler SPUSBDataType` (which showed nothing even over USB).
+
+**How to read the tunnel's logs from a Mac.** The extension's own `Logger` lines
+are **invisible** to `idevicesyslog` — the legacy syslog relay does not carry
+`os_log` from NetworkExtension processes, so the PID exists with zero output.
+`log stream` has no device option at all on macOS 26. What works is watching the
+system daemons instead:
+
+```bash
+brew install libimobiledevice
+idevicesyslog -u <UDID> -e backboardd,locationd,SpringBoard,mediaserverd,symptomsd,dasd \
+  | grep utun
+```
+
+7,191 lines named `utun5` and no other tunnel interface. The line that settles
+it is a *completed* transaction, not merely a routed one:
+
+```
+CKDFetchRecordZoneChangesURLRequest host=gateway.icloud.com
+  i=utun5 tlsVersion=TLSv13 protocol=h3
+  responseBodyBytes=132 err=F transactionDuration=0.290
+```
+
+`err=F` with a response body means the tunnel carries traffic both ways — not an
+interface standing over a dead path, which is exactly the P0 bug
+`PacketTunnelProvider.swift` was written to avoid.
+
+### Still open after that session
+
+- ⬜ **The tunnel has not been verified on a *distribution* build.** What was
+  proven is a development build. TestFlight ships a different signature —
+  `get-task-allow = false`, Apple Distribution rather than Apple Development —
+  and entitlement problems of exactly that class do not appear in development
+  builds.
+- ⬜ **Internal testers.** Nobody is on the build yet, so nobody can install it.
+- ⬜ **Reviewer sign-in credentials are unknown.** The `POST /auth/demo-login`
+  path *is* live in production — probed 2026-09-03: it answers **401**, and an
+  unconfigured deployment answers **404** (a bogus path on the same host does
+  return 404, so the distinction is real). The email and code are server
+  configuration; look in Play Console → App content → App access, or the server
+  repo's `backend/AUTH.md`. **External testing cannot be submitted without
+  them** — a reviewer who cannot sign in is the most common rejection there is.
+- ⬜ **App Store Connect API key.** Still not created, so `ios-release.yml`
+  still cannot run. The same key is all three ASC secrets it needs.
+- ⬜ **Screenshots.** Not produced. The Simulator cannot show a connected state
+  at all — a packet-tunnel extension does not run there, and the only target
+  that *builds* for the Simulator (`AvangardVPNDeviceTest`) is the one with the
+  extension removed. They have to come off a physical device.
+- ⬜ **`409` on registering a second device.** Provisioning Singapore on a
+  second device failed with `The server rejected the request (HTTP 409)`. That
+  is the fallback string in `APIClient.swift:27`, so the error **code** was
+  neither `device_limit_reached` nor anything else mapped — worth finding out
+  which, because the message a user sees is currently a raw status.
+- ⬜ **The layout does not use a 6.9" screen.** On an iPhone 17 Pro Max the
+  content stays centred and small, leaving large empty bands. Not a bug; it
+  will show in App Store screenshots.
 
 ### Step 1 — Go 1.21, and only 1.21
 
@@ -278,6 +375,21 @@ Every step below can be done from Windows (WSL or Git Bash). **Do not paste any
 of these values into a chat, a commit, or an issue** — `gh secret set` reads from
 a file so the value never reaches your shell history either.
 
+**Where this actually stands, 2026-09-03.** The first build reached TestFlight
+by hand from the Mac (Xcode Organizer), not through this pipeline — which has
+still never run:
+
+| Step | |
+|---|---|
+| 1. Distribution certificate | ✅ exists, created through Xcode on the Mac. The `.p12` for CI has **not** been exported yet |
+| 2. App Store Connect API key | ⬜ **not created** — this is the one blocker for the whole pipeline |
+| 3. Repository secrets | ⬜ none set. `gh secret list` is empty |
+| 4. The app record | ✅ created, Indonesia-only |
+| 5. Ship it | ⬜ never run |
+
+So step 2 is the thing to do first: one key yields all three ASC secrets, and
+the certificate for the other two is already in the Mac's keychain.
+
 ### 1. Distribution certificate
 
 Apple normally has you make this in Keychain Access. `openssl` does the same job:
@@ -428,14 +540,48 @@ Deliberately **not** declared: `deviceName`. On iOS 16+ — and 16.0 is the floo
 here — `UIDevice.current.name` returns the model string without a special
 entitlement, so what reaches the server is "iPhone" and it identifies nobody.
 
-### `ITSAppUsesNonExemptEncryption: true`
+### Export compliance — answered in App Store Connect, not in the plist
 
-Set in [`project.yml`](project.yml) on the app target. **True is the accurate
-answer, not the cautious one.** The exemption apps normally claim is "only uses
+⚠️ **There is deliberately no `ITSAppUsesNonExemptEncryption` key.** It used to
+be set to `true` in [`project.yml`](project.yml), so App Store Connect would
+stop asking per build. App Store Connect rejects that:
+
+```
+ITMS-90592: Invalid Export Compliance Code. The export compliance key value []
+in the app's Info.plist doesn't match the key value of the app's export
+compliance documentation.
+```
+
+`YES` in the plist claims documentation is already on file, so Apple then wants
+`ITSEncryptionExportComplianceCode` beside it — and that code exists only once
+App Encryption Documentation is filed in App Store Connect. It is not filed
+here, and per the CCATS row below probably never needs to be.
+
+**The answer has not changed; only where it is given.** True is the accurate
+answer, not the cautious one. The exemption apps normally claim is "only uses
 encryption available in the operating system", which fits an app whose crypto is
 HTTPS through `URLSession`. It does not fit one that embeds wireguard-go's own
 ChaCha20-Poly1305, Curve25519 and BLAKE2s. Nor do the others — authentication,
 DRM, medical. A VPN is the textbook non-exempt case.
+
+**What to answer in App Store Connect** (used 2026-09-03; the questionnaire
+returns per build until an answer is carried forward):
+
+| Question | Answer |
+|---|---|
+| Does your app use encryption? | **Yes** |
+| What type of encryption algorithms does your app implement? | **"Standard encryption algorithms instead of, or in addition to, using or accessing the encryption within Apple's operating system"** |
+| Is your app going to be available for distribution in France? | **No** |
+
+The middle one is where this goes wrong most easily. "Only encryption within
+Apple's operating system" is the tempting answer and it is **false** here —
+wireguard-go carries its own implementation into the `.appex`. "Proprietary" is
+equally false: every primitive is an IETF RFC.
+
+⚠️ The France answer is only accurate because **Availability was restricted to
+Indonesia first**. A new app record defaults to all 175 territories, France
+included. Set the territories *before* answering, or the answer is a false one —
+and a `Yes` obliges a separate cryptography declaration to **ANSSI**.
 
 ⚠️ **The declaration opens an obligation — a smaller and later one than the
 first version of this section claimed.** Checked against BIS and Apple on
@@ -445,7 +591,7 @@ first version of this section claimed.** Checked against BIS and Apple on
 |---|---|
 | Encryption registration (**ERN**) | **Gone.** BIS removed it in its rule of 29 March 2021 — nothing to register before exporting. |
 | **CCATS** | **Probably not needed.** Apple requires one only for *proprietary* algorithms no standards body accepts. Every primitive here is an IETF RFC — ChaCha20-Poly1305 (8439), Curve25519 (7748), BLAKE2s (7693) — Apple's "industry standard algorithm, not provided within the Apple operating system" row. |
-| **France declaration** | Only if the app is sold on the French App Store. An Indonesia-only release owes nothing. |
+| **France declaration** | Only if the app is sold on the French App Store. Availability was set to **Indonesia only** on 2026-09-03, so nothing is owed — but that is a setting someone can widen later, and widening it revives this. |
 | **Annual self-classification report** | **Retrospective, not a precondition.** ECCN 5D002 under License Exception ENC §740.17(b)(1), due 1 February for the *previous* calendar year and not owed at all for a year with no exports. CSV, 12 columns, to `crypt@bis.doc.gov` and `enc@nsa.gov`. |
 
 So the only export step between here and a release is **App Store Connect's own
@@ -553,20 +699,21 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
       assigns a v6 address. On-demand is deliberately off (see
       `VPNConfiguration.apply`): it is a product decision on a metered plan, and
       it would reconnect after a user had deliberately disconnected.
-- [ ] **P6** — TestFlight distribution. The pipeline exists
-      (`.github/workflows/ios-release.yml`, see
-      [TestFlight](#testflight-the-mac-free-path)); what is left is the five
-      repository secrets, the App Store Connect app record, and the export
-      questionnaire. No Mac required — an iPhone is.
+- [~] **P6** — TestFlight distribution. **Build `1.0 (1)` is on TestFlight as of
+      2026-09-03**, but it got there by hand from a Mac, not through the
+      pipeline — `ios-release.yml` has still never run. The app record and the
+      export questionnaire are done; what is left is the App Store Connect API
+      key and the repository secrets, plus adding an internal tester so somebody
+      can actually install it.
 
 ### Still missing, and why it matters
 
-- ⬜ **The only unproven thing left is the tunnel itself.** Everything below is
-  known-good or known-cheap; this one is neither, because it has never been run.
-  Nothing blocks it any more — the enrolment is paid, both App IDs carry
-  Network Extensions and App Groups, and `DEVELOPMENT_TEAM` is set. It needs a
-  Mac, a phone and half an hour. Start at
-  [Running it on a real iPhone](#-running-it-on-a-real-iphone-paid-account--start-here).
+- ✅ **The tunnel is no longer unproven.** It ran on an iPhone 12 on
+  2026-09-03 and carried real system traffic. What replaced it as the open
+  question is narrower and listed in
+  [Still open after that session](#still-open-after-that-session): the same
+  thing has not been watched on a **distribution** build, which is signed
+  differently from the development build that was tested.
 - **Nothing blocks review any more on the account side**: in-app account
   deletion (Guideline 5.1.1(v)), sign-in by code for the reviewer, and in-app
   privacy/terms links all landed with P4.5.
@@ -583,6 +730,10 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
   needed *before* release is App Store Connect's export questionnaire, plus a
   French declaration only if France is a market. See
   [Privacy manifest and export compliance](#privacy-manifest-and-export-compliance).
-- The **paid Apple Developer Program enrolment** is the remaining *engineering*
-  gate. It blocks P3-on-hardware, P5 and P6, and there is no workaround — a free
-  Apple ID cannot carry `packet-tunnel-provider`.
+- ~~The **paid Apple Developer Program enrolment** is the remaining *engineering*
+  gate.~~ Resolved: the enrolment is paid, the device is registered, and a
+  signed `.ipa` has shipped to TestFlight.
+- ⬜ **Reviewer sign-in credentials block external testing.** The
+  `/auth/demo-login` door is live in production but nobody here knows the email
+  and code. A reviewer who cannot sign in is the most common rejection there
+  is, so this gates Beta App Review and App Store review alike.
