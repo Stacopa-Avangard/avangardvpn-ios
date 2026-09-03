@@ -173,6 +173,8 @@ filter on subsystem `com.avangard.vpn.network-extension`.
 | `saveToPreferences` fails | The **app** target is missing `packet-tunnel-provider`. It is not a copy-paste slip that the app carries the extension's entitlement — `NETunnelProviderManager` is gated on it at the calling side too |
 | Connects, then nothing loads | Look for `startTunnel` in Console. A handshake that never completes points at the peer config, not at the app |
 | Works, then dies while the phone sleeps | The Go version. Go back to step 1 |
+| `error: exportArchive Copy failed`, and nothing else | GNU rsync ahead of openrsync on PATH. Xcode's IPA packaging only accepts openrsync's arguments, so the `brew install rsync` above breaks the export. Run it as `PATH="/usr/bin:$PATH" xcodebuild -exportArchive …`. The real message is in the `.xcdistributionlogs` bundle whose path xcodebuild prints one line earlier, never on stdout |
+| `unable to spawn process '/usr/bin/env' (No such file or directory)` from `WireGuardGoBridge` | Not a missing binary — `posix_spawn` returns ENOENT for a missing **working directory** too, and Xcode names the wrong file. The checkout was not where the target looked. Fixed by `Scripts/build-wireguard-go.sh`; see its header |
 
 ### You do not need TestFlight for this
 
