@@ -241,7 +241,11 @@ targets:
         #     Exception ENC §740.17(b)(1) is RETROSPECTIVE, not a precondition:
         #     due 1 February for the PREVIOUS calendar year, and not owed at all
         #     for a year with no exports. CSV, 12 columns, emailed to
-        #     crypt@bis.doc.gov and enc@nsa.gov.
+        #     crypt-supp8@bis.doc.gov and enc@nsa.gov. (This line said
+        #     crypt@bis.doc.gov until 2026-09-04; BIS's own page gives the
+        #     -supp8 address, and a report sent elsewhere is a report not sent.)
+        #     The whole picture, including why every other WireGuard VPN
+        #     answers the opposite way, is in EXPORT-COMPLIANCE.md.
         #
         # So the only export step between this key and a release is App Store
         # Connect's own questionnaire. US EAR applies at all because the App

@@ -200,20 +200,28 @@ interface standing over a dead path, which is exactly the P0 bug
   `get-task-allow = false`, Apple Distribution rather than Apple Development —
   and entitlement problems of exactly that class do not appear in development
   builds.
-- ⬜ **Internal testers.** Nobody is on the build yet, so nobody can install it.
-- ⬜ **Reviewer sign-in credentials are unknown.** The `POST /auth/demo-login`
-  path *is* live in production — probed 2026-09-03: it answers **401**, and an
-  unconfigured deployment answers **404** (a bogus path on the same host does
-  return 404, so the distinction is real). The email and code are server
-  configuration; look in Play Console → App content → App access, or the server
-  repo's `backend/AUTH.md`. **External testing cannot be submitted without
-  them** — a reviewer who cannot sign in is the most common rejection there is.
-- ⬜ **App Store Connect API key.** Still not created, so `ios-release.yml`
-  still cannot run. The same key is all three ASC secrets it needs.
-- ⬜ **Screenshots.** Not produced. The Simulator cannot show a connected state
-  at all — a packet-tunnel extension does not run there, and the only target
-  that *builds* for the Simulator (`AvangardVPNDeviceTest`) is the one with the
-  extension removed. They have to come off a physical device.
+- ✅ **Internal testers.** The group "Internal" has a tester whose state is
+  `INSTALLED`, so a distribution build is on a device. Verified against the API
+  2026-09-04; the "nobody is on the build yet" that stood here was never checked.
+- ✅ **Reviewer sign-in credentials are known.** Email
+  `<akun demo reviewer — lihat catatan operator>`, proven end to end against production
+  2026-09-03 and verified in App Store Connect 2026-09-04:
+  `demoAccountRequired: true` with the name set on **both**
+  `betaAppReviewDetail` (TestFlight) and `appStoreReviewDetail` (App Store).
+  Those are separate resources and each carries its own copy — filling one does
+  not fill the other. The code is stored server-side as a sha256 hash and can
+  never be read back, only rotated, so write it down at the moment you set it
+  and update both ASC records in the same breath.
+- ✅ **App Store Connect API key.** Created 2026-09-03: role **App Manager**,
+  key id `<ASC Key ID>`; the `.p8` lives outside every repo. It is all three ASC
+  secrets `ios-release.yml` needs — but the key was never what stopped that
+  workflow. Actions billing is, and the three repo secrets are still unset.
+- ✅ **Screenshots.** Eight delivered under `APP_IPHONE_65`, every one
+  `COMPLETE`. Verified against the API 2026-09-04. They had to come off a
+  physical device: the Simulator cannot show a connected state at all — a
+  packet-tunnel extension does not run there, and the only target that *builds*
+  for the Simulator (`AvangardVPNDeviceTest`) is the one with the extension
+  removed.
 - ⬜ **`409` on registering a second device.** Provisioning Singapore on a
   second device failed with `The server rejected the request (HTTP 409)`. That
   is the fallback string in `APIClient.swift:27`, so the error **code** was
@@ -569,7 +577,7 @@ submitted, and `GET …/appStoreVersionSubmission` returns 404:
 | `primaryCategory` | ✅ `UTILITIES`. Of 100 VPN apps on the Indonesian App Store the split is 46 Utilities / 44 Productivity, so there is no "correct" answer from population — but NordVPN and Proton VPN both sit in Utilities, while the Productivity side is mostly free "Fast VPN Proxy" listings |
 | `ageRating` | ✅ `FOUR_PLUS`. Everything `NONE`/`false`, including `unrestrictedWebAccess` — this app embeds no browser and renders no arbitrary web content. `unrestrictedWebAccess` and `ageAssurance` are **required** and are **booleans**; omitting either fails the PATCH with `ENTITY_ERROR.ATTRIBUTE.REQUIRED` |
 | description | ✅ reworded. Two lines promised bypassing local network restrictions and "disguising" browsing on office and campus networks. Against a `4+` declaration that says the opposite, the declaration is what loses |
-| demo account | ⬜ **still empty** — `demoAccountRequired=false` with no username or password, on an app that cannot be opened without signing in. The backend's `POST /auth/demo-login` is configured and `LoginView` already exposes "Have a sign-in code?"; only the code itself is missing, and it is deliberately not in this repo |
+| demo account | ✅ **set** — verified 2026-09-04: `demoAccountRequired: true`, name `<akun demo reviewer — lihat catatan operator>`, on `appStoreReviewDetail` **and** on `betaAppReviewDetail`, which is a separate resource for TestFlight. The code stays out of this repo |
 
 ⚠️ Build `1.0 (1)` carries none of this app's newer screens and expires
 **2026-12-01**. Whatever is submitted for review must be a build that contains
@@ -872,7 +880,11 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
 - ~~The **paid Apple Developer Program enrolment** is the remaining *engineering*
   gate.~~ Resolved: the enrolment is paid, the device is registered, and a
   signed `.ipa` has shipped to TestFlight.
-- ⬜ **Reviewer sign-in credentials block external testing.** The
-  `/auth/demo-login` door is live in production but nobody here knows the email
-  and code. A reviewer who cannot sign in is the most common rejection there
-  is, so this gates Beta App Review and App Store review alike.
+- ~~**Reviewer sign-in credentials block external testing.**~~ Resolved: the
+  email and code are known, proven against production 2026-09-03, and present
+  in both ASC review records (verified 2026-09-04). What gates a submission now
+  is metadata and the export-compliance answer, not access.
+- ⬜ **Export compliance is recorded wrongly in App Store Connect.** Both builds
+  read `usesNonExemptEncryption: false`, which claims our encryption is exempt;
+  it is not. Fixing it needs no rebuild. See
+  [`EXPORT-COMPLIANCE.md`](EXPORT-COMPLIANCE.md).
