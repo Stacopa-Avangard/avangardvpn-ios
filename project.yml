@@ -19,19 +19,20 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
-    # Apple Developer Team for PT Stacopa Avangard Raya. Enrolment was paid on
-    # 2026-09-02, which is what made signed device builds possible at all.
+    # Your Apple Developer Team, supplied by the environment rather than checked
+    # in. Set it before generating:
     #
-    # Checked in on purpose. A Team ID is not a secret — it is embedded in every
-    # provisioning profile and readable from any signed .ipa — and leaving it
-    # blank has a real cost here: `xcodegen generate` rewrites the .xcodeproj,
-    # so a team picked in Xcode's UI is wiped by the next generate. Whoever is
-    # building would have to re-select it every single time, and the failure
-    # when they forget is a signing error that reads like a certificate problem.
+    #     export AVANGARD_DEVELOPMENT_TEAM=YOURTEAMID
+    #     xcodegen generate
     #
-    # CI still passes CODE_SIGNING_ALLOWED=NO for the unsigned compile-check, so
-    # this changes nothing there.
-    DEVELOPMENT_TEAM: 8HSUX5T86H
+    # It is an environment variable rather than a blank line because
+    # `xcodegen generate` rewrites the .xcodeproj wholesale: a team picked in
+    # Xcode's UI is wiped by the next generate, and the failure when you forget
+    # to re-pick it is a signing error that reads like a certificate problem.
+    #
+    # Unset is fine for the unsigned compile-check — CI passes
+    # CODE_SIGNING_ALLOWED=NO and never needs a team.
+    DEVELOPMENT_TEAM: ${AVANGARD_DEVELOPMENT_TEAM}
     CODE_SIGN_STYLE: Automatic
 
     # iPhone only. Xcode's default is "1,2", which App Store Connect rejects

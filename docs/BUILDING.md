@@ -62,11 +62,27 @@ make: *** [.../wireguard-go-bridge/goroot/.prepared] Error 1
 and the entitlements are all generated from it and are not in git.
 
 ```bash
+export AVANGARD_DEVELOPMENT_TEAM=YOURTEAMID   # only needed for signed builds
 xcodegen generate
 open AvangardVPN.xcodeproj
 ```
 
-In Xcode, set the signing team on each target to your own, then build and run.
+⚠️ **Set the team through that variable, not through Xcode's UI.**
+`xcodegen generate` rewrites the whole `.xcodeproj`, so a team picked in the UI
+is wiped by the next generate. Forgetting to re-pick it produces a signing
+failure that reads like a certificate problem, which is a bad afternoon.
+
+If the variable is unset, the literal string `${AVANGARD_DEVELOPMENT_TEAM}`
+lands in the project as the team. Unsigned builds do not care —
+`CODE_SIGNING_ALLOWED=NO` never looks at it, which is how CI compiles this — but
+a signed build will fail confusingly. If a signing error mentions a team you do
+not recognise, that is this.
+
+Find your own with:
+
+```bash
+security find-identity -v -p codesigning
+```
 
 ## Running it on a device
 
