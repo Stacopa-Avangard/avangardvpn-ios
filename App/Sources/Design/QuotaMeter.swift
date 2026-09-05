@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  QuotaMeter.swift — bandwidth used against the monthly limit.
 //
 //  Ported from Android's `QuotaBar`: a gradient fill on a faint track, the used

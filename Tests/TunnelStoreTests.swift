@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TunnelStoreTests.swift — the app half of the tunnel: saving the system VPN
 //  configuration and starting the extension through it.
 //

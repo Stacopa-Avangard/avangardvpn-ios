@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  Keychain.swift — the only place secrets are persisted.
 //
 //  Mirrors what the Android app does with EncryptedSharedPreferences: session

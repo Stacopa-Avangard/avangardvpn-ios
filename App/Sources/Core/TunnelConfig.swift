@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TunnelConfig.swift — assemble the tunnel config locally.
 //
 //  The server hands back its half (its public key, endpoint, the assigned

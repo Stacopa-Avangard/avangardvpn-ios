@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  AuthStore.swift — sign-in state machine (device/poll flow).
 //
 //  Why polling instead of a deep link: the Android app learned the hard way

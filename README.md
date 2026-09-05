@@ -6,6 +6,24 @@ Native iOS client for **AvangardVPN**, mirroring the Android app
 second name, `vpn.stacopa-avangard.com`, which is a permanent alias onto the identical
 origin and cannot be retired — Android compiled it into every shipped build.
 
+## Licence
+
+**GPL-3.0-only** — see [`LICENSE`](LICENSE) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Every Swift file carries an `SPDX-License-Identifier` header.
+
+The app is open source so anyone can check it does what it claims: that the
+private key is generated on the device and never leaves it, and that the client
+collects only what its data disclosure screen says. That is also what puts the
+app outside EAR scope for export purposes — see
+[`EXPORT-COMPLIANCE.md`](EXPORT-COMPLIANCE.md), which explains why that answer
+only becomes accurate once the source is actually public.
+
+⚠️ **Values redacted from this file live in the operator's notes, not here.** The
+test device UDID, the reviewer demo account, and the App Store Connect key id
+were removed 2026-09-06 in preparation for publication. They are still in git
+history; see the publication checklist in `AGENTS.md` before making the
+repository public.
+
 ## Architecture
 
 Three targets in one Xcode project (defined by [`project.yml`](project.yml), XcodeGen):
@@ -542,7 +560,7 @@ the REST API. It exists because the console is slow to audit and because the CI
 that used to do this cannot run — see [TestFlight](#testflight-the-mac-free-path).
 
 ```bash
-export ASC_KEY_PATH=/path/to/AuthKey_<ASC Key ID>.p8   # never in this repo
+export ASC_KEY_PATH=/path/to/AuthKey_<KEYID>.p8   # never in this repo
 export ASC_KEY_ID=<ASC Key ID>
 export ASC_ISSUER_ID=…                               # Users and Access → Integrations
 export ASC_APP_ID=6808064676

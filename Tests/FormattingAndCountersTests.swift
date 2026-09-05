@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  FormattingAndCountersTests.swift — two pure functions that the UI is only as
 //  correct as.
 //

@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  DataDisclosureView.swift — the in-app data declaration Guideline 5.4 requires.
 //
 //  5.4 (VPN Apps): "You must make a clear declaration of what user data will be

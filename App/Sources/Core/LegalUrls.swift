@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  LegalUrls.swift — the public legal pages, ported from Android's util/LegalUrls.kt.
 //
 //  Derived from the API host so a DEBUG build pointed at a local backend links

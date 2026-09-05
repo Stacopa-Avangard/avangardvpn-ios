@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  WireGuardKey.swift — on-device keypair generation.
 //
 //  The central rule of this project: the server never holds a private key for

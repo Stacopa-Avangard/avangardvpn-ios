@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TunnelStore.swift — start and stop the tunnel, and track what it is doing.
 //
 //  The app never touches the packet tunnel directly. It writes a configuration

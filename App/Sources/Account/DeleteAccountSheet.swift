@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  DeleteAccountSheet.swift — confirmation for irreversible account deletion.
 //
 //  App Store Review Guideline 5.1.1(v): an app that lets people create an

@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  render.swift — renders the iOS app icon from the SAME vector the Android
 //  launcher icon uses (ui/src/main/res/drawable/ic_launcher_foreground.xml),
 //  on the same gradient (app/src/main/res/drawable/ic_launcher_background.xml).

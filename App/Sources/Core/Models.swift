@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  Models.swift — wire types for the backend API.
 //
 //  These mirror `backend/src/routes/auth.ts` exactly. The backend speaks

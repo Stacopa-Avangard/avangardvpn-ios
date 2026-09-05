@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  ByteFormat.swift — human-readable byte counts and rates.
 //
 //  ⚠️ Base 1000, not 1024, and deliberately NOT ByteCountFormatter.

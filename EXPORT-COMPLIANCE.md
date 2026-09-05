@@ -330,13 +330,40 @@ Tiga pemicu. Salah satunya terjadi, dokumen ini jadi basi.
    tidak dijual — menjual **layanan** VPN tetap boleh. Notifikasi TSU lama ke
    BIS/NSA sudah tidak diperlukan.
 
-   Kalau ini dilakukan, struktur Mullvad adalah modelnya: kode sumber di bawah
-   GPL-3.0, biner App Store di bawah EULA standar Apple. Lisensi ganda itu hanya
-   bekerja karena satu entitas memegang seluruh hak cipta. **CLA wajib ada sejak
-   kontribusi luar pertama** — begitu ada pihak lain ikut memiliki kodenya, kita
-   tidak lagi bisa mendistribusikan biner di bawah syarat Apple secara sepihak,
-   dan hak app untuk berada di App Store bergantung pada itu. VLC ditarik dari
-   App Store pada 2011 persis karena hal ini.
+   ⚠️ **Koreksi 2026-09-06.** Versi sebelumnya paragraf ini menyebut struktur
+   Mullvad sebagai lisensi ganda — kode GPL-3.0, biner App Store di bawah EULA
+   standar Apple — dan menyimpulkan **CLA wajib** sejak kontributor luar pertama.
+   Diperiksa langsung ke repo publiknya, itu **tidak benar**:
+
+   | | Lisensi | Pengalihan hak cipta |
+   |---|---|---|
+   | `mullvad/mullvadvpn-app` | GPL-3.0 | ⛔ tidak ada CLA sama sekali |
+   | `ivpn/desktop-app` | GPL-3.0 | ada `CLA.md`, tapi isinya sertifikat asal-usul gaya DCO — bukan pengalihan hak |
+   | `WireGuard/wireguard-apple` | MIT | tidak relevan, permisif |
+
+   `CONTRIBUTING.md` Mullvad meminta kontributor memberi hak *"use, publish,
+   change or remove"* — tapi **"under the terms defined by the GPL 3.0 license"**.
+   Frasa itu membatasi izinnya pada lisensi yang sama; ia bukan hak melisensikan
+   ulang, jadi ia tidak memungkinkan lisensi ganda. CLA milik IVPN meniru
+   Developer Certificate of Origin: kontributor menyatakan **berhak** menyerahkan
+   karyanya di bawah GPLv3, bukan menyerahkan kepemilikannya.
+
+   Jadi tidak satu pun pembanding melakukan struktur yang paragraf lama gambarkan.
+
+   ⚠️ Yang tetap benar: ketegangan antara GPL dan syarat App Store itu nyata —
+   VLC ditarik pada 2011 karenanya. **Bagaimana** Mullvad dan IVPN mengirimkannya
+   tidak bisa dipastikan dari repo publik mereka; EULA sendiri adalah dugaan yang
+   masuk akal karena Apple mengizinkannya, tapi itu dugaan dan ditandai sebagai
+   dugaan.
+
+   **Pilihan repo ini, 2026-09-06: GPL-3.0-only, tanpa CLA**, mengikuti bentuk
+   Mullvad. Konsekuensinya harus disadari: tanpa CLA, lisensinya **tidak bisa
+   diubah belakangan** tanpa persetujuan setiap kontributor, atau menulis ulang
+   bagian mereka. Itu ongkos yang diterima, bukan yang terlewat.
+
+   ⚠️ Repo Android menyatakan `Apache-2.0` di 34 berkas dan tidak punya berkas
+   `LICENSE`. Dua klien satu produk kini berbeda lisensi — samakan atau catat
+   alasannya sebelum salah satunya dibuka.
 
 2. **Membuka ketersediaan ke Prancis.** Deklarasi enkripsi Prancis jatuh tempo
    begitu app dijual di App Store Prancis.

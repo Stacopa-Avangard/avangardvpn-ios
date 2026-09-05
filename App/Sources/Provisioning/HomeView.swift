@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  HomeView.swift — the connect screen.
 //
 //  Laid out to match Android's HomeScreen.kt: a tracked caption, the region

@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  Theme.swift — the app's visual tokens.
 //
 //  A port of the Android client's "security console" design system

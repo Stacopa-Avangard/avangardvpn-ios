@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  AppConfig.swift — compile-time constants shared across the app.
 //
 //  The backend is the same one the Android app talks to

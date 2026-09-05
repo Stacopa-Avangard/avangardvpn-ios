@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  AuthFlowTests.swift — integration tests for the poll-login flow.
 //
 //  These talk to a REAL backend, run locally:

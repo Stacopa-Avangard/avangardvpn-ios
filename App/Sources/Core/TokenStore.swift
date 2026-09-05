@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TokenStore.swift — persistence for the signed-in session.
 //
 //  Refresh-token rotation has no grace window server-side: the moment

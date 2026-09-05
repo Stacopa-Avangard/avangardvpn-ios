@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  ProvisioningTests.swift — on-device keygen + region registration.
 //
 //  Same harness as AuthFlowTests: the network tests need a local backend and a

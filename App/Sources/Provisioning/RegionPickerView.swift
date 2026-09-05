@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  RegionPickerView.swift — choose (and provision) a region.
 //
 //  Presented as a bottom sheet on the raised ground, matching Android's

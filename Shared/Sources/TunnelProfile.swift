@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TunnelProfile.swift — the config the app hands to the tunnel extension.
 //
 //  Compiled into BOTH targets (see `Shared/Sources` in project.yml). The app

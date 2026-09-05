@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  DeviceIdentity.swift — the stable id this device registers under.
 //
 //  Deliberately NOT `identifierForVendor`: that resets when the user deletes

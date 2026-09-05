@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  BottomNav.swift — the floating tab bar, ported from Android's RootScreen.kt.
 //
 //  Not a `TabView`. UIKit's tab bar is a docked opaque strip, and the whole

@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  AccountView.swift — who you are, what you've used, which devices you have.
 //
 //  Laid out to match Android's AccountScreen.kt: the avatar header, the quota

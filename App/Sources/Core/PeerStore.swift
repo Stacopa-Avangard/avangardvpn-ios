@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  PeerStore.swift — per-region peer credentials.
 //
 //  Keyed by region, not by device, because `peers.public_key` is UNIQUE

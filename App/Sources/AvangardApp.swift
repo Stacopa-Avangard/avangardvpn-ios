@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  AvangardApp.swift — app entry point (SwiftUI lifecycle).
 //
 //  Routes between the splash, the sign-in flow and the signed-in shell.

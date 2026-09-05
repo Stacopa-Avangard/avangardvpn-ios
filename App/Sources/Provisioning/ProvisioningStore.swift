@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  ProvisioningStore.swift — region catalogue + device registration.
 //
 //  Provisioning a region means: mint a keypair for it (if this device has none

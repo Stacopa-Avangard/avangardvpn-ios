@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  APIClient.swift — the app's only network entry point.
 //
 //  An actor, for one specific reason: refresh-token rotation is single-use. If

@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TunnelProfile+WireGuard.swift — map our config onto WireGuardKit's types.
 //
 //  Tunnel-only on purpose. WireGuardKit is linked into the extension and not

@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  VPNConfiguration.swift — the app's side of the system VPN configuration.
 //
 //  This is the seam over NETunnelProviderManager: one saved entry under

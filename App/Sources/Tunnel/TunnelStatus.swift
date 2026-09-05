@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  TunnelStatus.swift — the tunnel's state, in the terms the UI needs.
 //
 //  A narrowing of NEVPNStatus. It exists for two reasons: the app should not

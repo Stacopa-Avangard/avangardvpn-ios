@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  LoginView.swift — email entry + "check your inbox" waiting state.
 //
 //  Ported to match Android's LoginScreen.kt: the shield mark, the email field,

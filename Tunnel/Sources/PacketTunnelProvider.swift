@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  PacketTunnelProvider.swift — the WireGuard tunnel runs in this app extension.
 //
 //  P3. Replaces the P0 stub, which satisfied the NEPacketTunnelProvider

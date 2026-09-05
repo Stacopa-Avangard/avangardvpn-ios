@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  ConnectOrb.swift — the signature element, ported from Android's ConnectOrb.kt.
 //
 //  A concentric-ring reactor whose glow and accent track the connection phase:

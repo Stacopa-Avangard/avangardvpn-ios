@@ -1,4 +1,7 @@
 //
+//  SPDX-License-Identifier: GPL-3.0-only
+//  Copyright © 2026 PT Stacopa Avangard Raya
+//
 //  SplashView.swift — the brand splash, ported from Android's SplashScreen.kt.
 //
 //  A blue radial glow over near-black, the white Avangard shield, and the
