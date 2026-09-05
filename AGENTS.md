@@ -10,17 +10,6 @@ Backend: `https://app.avangardvpn.com` (canonical). It answers to a second name,
 
 Three targets in one XcodeGen project: the app, the `NEPacketTunnelProvider` extension, and a device-test app. See [`README.md`](README.md) for architecture and the step-by-step guides.
 
-## Current state — 2026-09-02
-
-- Apple Developer Program **paid**; Organization verification passed for `PT Stacopa Avangard Raya`, Team ID **`8HSUX5T86H`**.
-- Both App IDs registered with **Network Extensions + App Groups**: `com.avangard.vpn` and `com.avangard.vpn.network-extension`, both bound to App Group `group.com.avangard.vpn`.
-- P0–P4.5 done. App icon and both privacy manifests are in and asserted by CI on the built `.app`. The **export declaration is deliberately NOT in the plist** — `76d8ee9` moved it to App Store Connect after `ITMS-90592`, so the CI assertion that still demands `ITSAppUsesNonExemptEncryption` is stale and would fail the build if Actions ever ran again. See [`EXPORT-COMPLIANCE.md`](EXPORT-COMPLIANCE.md).
-- **No In-App Purchase** — decided 2026-09-02. The app sells nothing and may not promote what the website sells; see § *Monetisation* below before touching the Account or Home screens.
-- ✅ **The tunnel ran on a phone, 2026-09-03.** iPhone 12, iOS 26.6, region Singapore. Verified from the outside rather than from the app's own UI: iOS system daemons (`cloudd`, `apsd`, `featureaccessd`) routed over `utun5` with *completed* HTTPS transactions (`err=F`, real response bodies), and the phone's public IP was Singapore. Build `1.0 (1)` is on TestFlight.
-- ✅ **The tunnel works on a *distribution* build.** Reported by the operator 2026-09-04: build `1.0 (1)` from TestFlight, connected to **both** Singapore and Germany, no problems. That is the entitlement-class risk closed — `get-task-allow = false` and an Apple Distribution signature would have stopped the tunnel coming up at all, the way the Keychain bug of 2026-09-02 did. ⚠️ Weaker evidence than the 2026-09-03 development test, which was instrumented: this one is a person saying it connected, not a captured log with a completed transaction (`err=F`). If a tunnel fault is ever suspected on a shipped build, re-run the `idevicesyslog` recipe rather than leaning on this line. It carries to build `1.0 (2)`: `git diff 5bc8269 387d49e` touches `Tunnel/`, `Shared/` and `App/Sources/Tunnel/` **not at all** — only the disclosure screen, the entry-point routing and the version keys.
-- ✅ **Reviewer sign-in credentials are known.** `<akun demo reviewer — lihat catatan operator>`, proven against production 2026-09-03 and present in App Store Connect 2026-09-04 with `demoAccountRequired: true` — on `betaAppReviewDetail` **and** `appStoreReviewDetail`, which are separate resources. The code is stored only as a sha256 hash and cannot be recovered: write it down when you rotate it, and update both records in the same breath.
-- ⬜ **Export compliance is wrong in App Store Connect, and locked.** Both builds read `usesNonExemptEncryption: false`; this app is closed-source and ships its own crypto in `wireguard-go`, so `true` is the accurate answer. ⛔ The field is **write-once** — a PATCH on either build returns `409 "You cannot update when the value is already set."`, so neither can be corrected. Decided 2026-09-04 to leave them and let them expire. The build that is actually submitted for review must be answered `true` **while the field is still `null`**. Read [`EXPORT-COMPLIANCE.md`](EXPORT-COMPLIANCE.md) first, and do not "fix" it by putting the key back in the plist.
-
 ## ⛔ Four things that must not be "fixed"
 
 Each of these looks like an oversight and is not. Three were paid for once already.
@@ -41,26 +30,6 @@ The **app** target declares `com.apple.developer.networking.networkextension: [p
 `packages:` points at **our fork** `Stacopa-Avangard/wireguard-apple`, pinned **by revision**, because upstream's `Package.swift` declares tools-version 5.3 while using `.iOS(.v15)` — SwiftPM refuses the package outright. The fork is 2 files, +2 −1.
 
 ⚠️ **Debt to settle before real users:** the fork is frozen on Feb-2023 dependencies including `golang.org/x/crypto v0.6.0`. No known advisory touches WireGuard's usage, but the distance is unmanaged. `mullvad/wireguard-apple`'s `mullvad-master` is the candidate — but moving needs an **audit, not a swap**: it carries multihop, DAITA, TCP-in-tunnel, and a "Stop configuring tunnel settings" commit that may move network-settings responsibility to the caller. If it does, our provider comes up **with no routes**.
-
-## Release artifacts — what breaks quietly
-
-All three fail the same way: **build green, upload rejected.** CI asserts them on the built `.app`; keep that step.
-
-- **Two `PrivacyInfo.xcprivacy` files**, one per bundle, because Apple scans each binary. The app declares email + account id + device UUID and `UserDefaults` (`CA92.1`). The extension declares **nothing collected** and system boot time (`35F9.1`).
-  ⛔ **Do not delete the extension's boot-time declaration because grepping `Tunnel/Sources` finds nothing.** It is there for **wireguard-go**, whose timers run on a monotonic clock that is `mach_absolute_time` on Darwin. Apple's scanner reads symbols, not intent.
-- **`CFBundleIconName` is pinned in `project.yml`**, on both app targets, because actool on Xcode 26 writes it only *inside* `CFBundleIcons > CFBundlePrimaryIcon` and leaves the top level empty — and ITMS-90713 is about the top-level key. Its value must stay equal to `ASSETCATALOG_COMPILER_APPICON_NAME`.
-- **`ITSAppUsesNonExemptEncryption: true`** is the accurate answer, not the cautious one. `false` would be a false declaration: this app embeds wireguard-go's own ChaCha20-Poly1305, Curve25519 and BLAKE2s, so the "encryption available in the operating system" exemption does not apply.
-
-### Export compliance — the smaller version
-
-An earlier draft of the docs claimed the BIS filing blocks TestFlight. **It does not.** Verified 2026-09-02:
-
-- **No ERN** — BIS removed the encryption-registration requirement in its rule of 29 March 2021.
-- **Probably no CCATS** — Apple requires one only for *proprietary* algorithms no standards body accepts; every primitive here is an IETF RFC. This is the one judgement worth a professional opinion, and it is labelled as a judgement rather than a fact.
-- **France declaration** only if the app is sold on the French App Store.
-- **The annual ECCN 5D002 self-classification report is retrospective** — due 1 February for the *previous* calendar year, and not owed at all for a year with no exports.
-
-The only export step before a release is App Store Connect's questionnaire.
 
 ## Monetisation — the app sells nothing, on purpose
 
@@ -130,13 +99,11 @@ The product is **`AvangardVPN`**, one closed-up word, as in ExpressVPN or NordVP
 ## Conventions
 
 - **`project.yml` is the source of truth.** The `.xcodeproj`, `Info.plist`s and `.entitlements` are generated and gitignored — never edit or commit them.
-- **Branch → PR → CI green → merge.** CI (`ios-build.yml`) builds app + tunnel for the device, builds the device-test target, and runs the offline tests. `ios-release.yml` is manual/tag-only and uploads to TestFlight; **it has never been run** and needs five repository secrets first.
+- **Branch → PR → CI green → merge.** CI (`ios-build.yml`) builds app + tunnel for the device, builds the device-test target, and runs the offline tests.
 - Test runs must **not** pass `CODE_SIGNING_ALLOWED=NO` — the Keychain rejects unsigned bundles (`errSecMissingEntitlement`, -34018). Simulator ad-hoc signing is enough.
-- Never commit certificates, `.p12`, `.p8`, `.mobileprovision` or API keys. Secrets go to GitHub via `gh secret set` reading from a file, never pasted into a shell, a commit or a chat.
+- ⛔ **No credentials in this repository, ever** — no certificates, no keys, no account addresses, no device identifiers. Signing and release material lives outside it.
 - The server holds **no private key**. Keys are generated on device and stay in the Keychain. Do not reintroduce any path where the server generates or returns one.
 - Byte counts are **base 1000** (`Core/ByteFormat.swift`), matching the backend, the portal and Android. `ByteCountFormatter` with `.binary` is how "10 GB" became "9.3 GB" here once already.
 - The design system is a **port of Android's**, not a lookalike. A palette change lands on both clients or neither; `Theme.swift` mirrors `ui/theme/Theme.kt` value for value.
 
 ## Where to start
-
-For getting the app onto a phone, read [`README.md`](README.md) § **"▶ Running it on a real iPhone (paid account) — start here"**. It is self-contained and carries the known failure modes, including the two whose error messages point somewhere other than the cause.

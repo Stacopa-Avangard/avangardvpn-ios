@@ -191,9 +191,16 @@ jobs:
             echo "::error::extension privacy manifest missing from $APPEX (ITMS-91053)"; exit 1
           fi
 
-          if ! plutil -extract ITSAppUsesNonExemptEncryption raw "$APP/Info.plist"; then
-            echo "::error::ITSAppUsesNonExemptEncryption absent - every build lands in Missing Compliance"; exit 1
-          fi
+          # ⛔ Do NOT assert ITSAppUsesNonExemptEncryption here, and do not put
+          # the key back in the plist to make an assertion pass. It was removed
+          # deliberately: with the key present and no compliance code beside it,
+          # App Store Connect refuses the upload with ITMS-90592. The export
+          # answer is given per build in App Store Connect instead, which is
+          # also the only place it can be changed.
+          #
+          # This assertion outlived the change by three days only because
+          # Actions had no minutes and never ran. The first run after the
+          # repository went public failed on it.
 
           # ITMS-90713 is about the TOP-LEVEL CFBundleIconName, and on Xcode 26
           # actool does not write one: it compiles the catalog, emplaces
