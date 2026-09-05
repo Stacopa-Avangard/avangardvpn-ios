@@ -16,7 +16,7 @@ memuat dasar jawaban kita, buktinya, dan satu kewajiban yang menyertainya.
 
 ---
 
-## Keadaan sekarang — PERLU TINDAKAN
+## Keadaan sekarang — SALAH DAN TERKUNCI
 
 Diperiksa lewat App Store Connect API pada **2026-09-04**:
 
@@ -29,6 +29,9 @@ Diperiksa lewat App Store Connect API pada **2026-09-04**:
 Kedua build tercatat **exempt**, dan itu bertentangan dengan dokumen ini maupun
 dengan [`project.yml`](project.yml) baris 191-245.
 
+⛔ Dan keduanya **tidak bisa lagi dibetulkan** — field-nya sekali tulis. Lihat
+§ *Cara memperbaikinya* di bawah.
+
 Nilai itu bukan berarti "belum dijawab": build yang belum menjawab berstatus
 *Missing Compliance* dan tidak bisa didistribusikan sama sekali, sedangkan build
 1 sudah sampai ke tester internal. Jadi pertanyaannya sudah dijawab — dan
@@ -38,30 +41,66 @@ dijawab keliru.
 `387d49e1` ("app and extension both 1.0 (2), no ITS* keys, iPhone-only"). Nilai
 yang salah hanya ada di App Store Connect.
 
-### Cara memperbaikinya
+### Cara memperbaikinya — TIDAK BISA di tempat
 
-Tanpa build ulang, tanpa unggah ulang, tanpa nomor build baru. Skema
-`BuildUpdateRequest` milik Apple hanya membuka dua atribut yang boleh ditulis
-pada sebuah build:
-
-```
-expired
-usesNonExemptEncryption
-```
-
-Export compliance sengaja jadi salah satunya, karena jawabannya diberikan
-*setelah* biner selesai dibangun dan bukan bagian dari biner itu. Satu panggilan
-per build:
+⛔ **Field ini sekali tulis.** Dicoba pada kedua build 2026-09-04; Apple menolak
+keduanya dengan kata-kata yang sama:
 
 ```
-PATCH /v1/builds/<build-id>
-{ "data": { "type": "builds", "id": "<build-id>",
-            "attributes": { "usesNonExemptEncryption": true } } }
+PATCH /v1/builds/d6b97680-8754-467e-acc5-1a4a1a936590
+{ "attributes": { "usesNonExemptEncryption": true } }
+
+HTTP 409  ENTITY_ERROR.ATTRIBUTE.INVALID
+"You cannot update when the value is already set."
+  pointer: /data/attributes/usesNonExemptEncryption
 ```
 
-UI App Store Connect (TestFlight -> Builds -> iOS -> pilih build -> Export
-Compliance) memanggil endpoint yang sama. UI sering menolak menyunting jawaban
-yang sudah pernah diberikan; API tidak.
+Versi dokumen ini sebelumnya berbunyi *"UI sering menolak menyunting jawaban yang
+sudah pernah diberikan; API tidak."* **Itu keliru.** API menolak dengan alasan
+yang persis sama, dan tulisan itu mengirim pembacanya ke jalan buntu.
+
+`BuildUpdateRequest` memang hanya membuka `expired` dan
+`usesNonExemptEncryption`, dan jawabannya memang diberikan setelah biner ada —
+tapi hanya **sekali**. Nilai `null` bisa diisi; nilai yang sudah terisi, baik
+`true` maupun `false`, terkunci selamanya untuk build itu.
+
+Artinya build 1 dan build 2 **tidak bisa dibetulkan**. Yang tersisa dua jalan.
+
+**Jalan 1 — jawab benar pada build berikutnya.** Sementara `usesNonExemptEncryption`
+masih `null`, satu PATCH menetapkannya. Kodenya tidak perlu berubah; cukup nomor
+build naik. Ini yang paling murah dan tidak menyentuh apa pun yang sedang
+bekerja. ⚠️ Butuh Mac — tidak bisa dikerjakan dari Windows.
+
+**Jalan 2 — deklarasi enkripsi tingkat app.** `POST /v1/appEncryptionDeclarations`
+ternyata **ada** dan menerima pembuatan; atribut wajibnya (dipastikan lewat probe
+bernilai kosong pada 2026-09-04):
+
+```
+app  appDescription  availableOnFrenchStore
+containsProprietaryCryptography  containsThirdPartyCryptography
+```
+
+Untuk app ini: `containsProprietaryCryptography: false` (semua primitif ber-RFC
+IETF — lihat § *Yang tidak terutang*), `containsThirdPartyCryptography: true`
+(kripto wireguard-go), `availableOnFrenchStore: false` selama Indonesia-only.
+
+⚠️ **Tapi ini bukan sekadar menyunting field.** Deklarasi adalah pengajuan formal
+ke Apple dengan state-nya sendiri (`CREATED` → `IN_REVIEW` →
+`APPROVED`/`REJECTED`), dan build yang dilampirkan ke deklarasi yang belum
+disetujui berisiko berhenti terdistribusi. Build 2 sekarang `IN_BETA_TESTING` dan
+terpasang di perangkat tester. Jangan tempuh jalan ini untuk membetulkan build
+lama; ia menukar deklarasi yang salah dengan build yang mati.
+
+### Keputusan 2026-09-04
+
+**Dibiarkan.** Build 1 dan 2 tetap tercatat `false` dan akan kedaluwarsa sendiri
+1 dan 2 Desember 2026. Tidak ada yang terhalang hari ini, dan laporan BIS baru
+jatuh tempo 1 Februari 2027.
+
+⚠️ **Yang wajib dilakukan:** build yang benar-benar diajukan ke App Store review
+harus dijawab **`true` selagi fieldnya masih `null`** — sebelum menyentuh apa pun
+yang lain pada build itu, karena kesempatannya cuma sekali. Kalau terlanjur
+terisi salah, satu-satunya jalan adalah build baru lagi.
 
 ---
 
