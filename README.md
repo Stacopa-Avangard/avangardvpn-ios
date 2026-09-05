@@ -134,7 +134,7 @@ rest of this file.
 | App Store Connect app record | ✅ created; availability restricted to **Indonesia only** |
 | TestFlight build `1.0 (1)` | ✅ uploaded 2026-09-03, compliance answered, **Ready to Submit** |
 | Internal testers | ✅ **already there** — the group "Internal" has a tester whose state is `INSTALLED`, so a distribution build is on a device. Verified against the API 2026-09-04; the earlier "none added yet" here was simply never checked |
-| Tunnel on a **distribution** build | ⬜ unverified — see below. Note this needs no new upload: build `1.0 (1)` is `IN_BETA_TESTING` until **2026-12-01** |
+| Tunnel on a **distribution** build | ✅ **2026-09-04** — build `1.0 (1)` from TestFlight, Singapore **and** Germany, operator-reported. Not instrumented, unlike the development test; see `AGENTS.md` for what that does and does not establish |
 | External TestFlight | ⛔ `externalBuildState=BETA_REJECTED`, with a `betaAppReviewSubmissions` record submitted 2026-09-03 11:06 WIB. Nobody remembers submitting it, no external group exists, and the API exposes neither who submitted nor why it was refused — that lives only in Resolution Center. It blocks nothing: internal testing is unaffected, and the state is per build |
 
 ### What the first Mac session found — 2026-09-03
@@ -855,12 +855,16 @@ Without `AVANGARD_API_BASE` set, the network tests skip themselves, so a plain
 
 ### Still missing, and why it matters
 
-- ✅ **The tunnel is no longer unproven.** It ran on an iPhone 12 on
-  2026-09-03 and carried real system traffic. What replaced it as the open
-  question is narrower and listed in
-  [Still open after that session](#still-open-after-that-session): the same
-  thing has not been watched on a **distribution** build, which is signed
-  differently from the development build that was tested.
+- ✅ **The tunnel is proven on both signatures.** A development build carried
+  real system traffic on an iPhone 12 on 2026-09-03, watched from the outside
+  (`utun5`, completed transactions, `err=F`). The narrower question that
+  replaced it — whether it also comes up under an Apple Distribution signature
+  with `get-task-allow = false` — was answered on 2026-09-04: build `1.0 (1)`
+  installed from TestFlight connected to **Singapore and Germany**, reported by
+  the operator. ⚠️ That second one is a person's report, not a captured log.
+  It is enough to close the entitlement-class risk, because a failure of that
+  class stops the tunnel coming up at all; it is not enough to diagnose a
+  subtler fault. Re-run the `idevicesyslog` recipe if one is ever suspected.
 - **Nothing blocks review any more on the account side**: in-app account
   deletion (Guideline 5.1.1(v)), sign-in by code for the reviewer, and in-app
   privacy/terms links all landed with P4.5.
