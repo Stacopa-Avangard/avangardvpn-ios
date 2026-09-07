@@ -6,7 +6,7 @@ Instructions for coding agents working in this repository (`Stacopa-Avangard/ava
 
 Native **iOS client** for **AvangardVPN**, a personal WireGuard-based VPN. It mirrors the Android client (`Stacopa-Avangard/avangardvpn-android`) and talks to the **same backend** (`Stacopa-Avangard/avangardvpn-server`) with **zero backend changes**.
 
-Backend: `https://app.avangardvpn.com` (canonical). It answers to a second name, `https://vpn.stacopa-avangard.com`, which is a permanent alias onto the identical origin. ⛔ **That alias can never be retired** — every shipped Android build compiled it in and its in-app updater reads `/api/version` there.
+Backend: `https://app.avangardvpn.com`. The base URL is the only environment-specific value in the client; it lives in `Core/AppConfig.swift` and nowhere else.
 
 Three targets in one XcodeGen project: the app, the `NEPacketTunnelProvider` extension, and a device-test app. See [`README.md`](README.md) for architecture and the step-by-step guides.
 
@@ -29,64 +29,23 @@ The **app** target declares `com.apple.developer.networking.networkextension: [p
 
 `packages:` points at **our fork** `Stacopa-Avangard/wireguard-apple`, pinned **by revision**, because upstream's `Package.swift` declares tools-version 5.3 while using `.iOS(.v15)` — SwiftPM refuses the package outright. The fork is 2 files, +2 −1.
 
-⚠️ **Debt to settle before real users:** the fork is frozen on Feb-2023 dependencies including `golang.org/x/crypto v0.6.0`. No known advisory touches WireGuard's usage, but the distance is unmanaged. `mullvad/wireguard-apple`'s `mullvad-master` is the candidate — but moving needs an **audit, not a swap**: it carries multihop, DAITA, TCP-in-tunnel, and a "Stop configuring tunnel settings" commit that may move network-settings responsibility to the caller. If it does, our provider comes up **with no routes**.
+Pinning to a revision rather than a branch is deliberate: a moving branch would change the tunnel's cryptography without a review. Any move to a different upstream is an **audit, not a swap** — variants carry extra features (multihop, DAITA, TCP-in-tunnel) and at least one that shifts network-settings responsibility to the caller, which would bring our provider up with no routes.
 
-## Monetisation — the app sells nothing, on purpose
+## The app sells nothing
 
-Decided 2026-09-02: **Option A, no In-App Purchase.** The app is a free
-stand-alone companion to a paid web service; every purchase happens on
-`app.avangardvpn.com`. That is a policy position, not an unfinished feature.
+⛔ There are no purchase flows in this client, and that is deliberate, not an
+unfinished feature. None of these may be added: a "Renew" / "Top up" / "Buy"
+control of any kind (including one that only opens a browser), a price anywhere,
+plan comparisons, upsell cards, promotional banners, or a push notification
+inviting a purchase.
 
-Two App Store rules stack here, and the VPN-specific one is the stricter:
-
-- **3.1.3(f) Free Stand-alone Apps** lets a free companion to a paid web tool
-  skip IAP *"provided there is no purchasing inside the app, or calls to action
-  for purchase outside of the app."*
-- **5.4 VPN Apps** goes further: a VPN app must *"be free on the App Store"* and
-  must *"not display prominent promotions for paid services in the VPN app
-  itself."* That bans promotion, not merely purchase links — a plan-comparison
-  banner with no button still breaks it.
-
-Neither escape hatch reaches us: the 0% external-link allowance from Epic v.
-Apple is **US storefront only**, and the DMA rates are EU only. Indonesia gets
-neither.
-
-### What this forbids
-
-⛔ When billing is switched on, none of these may enter the iOS app:
-
-1. A "Renew" / "Top up" / "Buy" control of any kind, including one that merely
-   opens a browser
-2. A price, anywhere
-3. Plan comparisons, upsell cards, promotional banners
-4. Push notifications inviting a purchase
-5. An out-of-quota message that *suggests what to do about it*
-
-Number 5 is the one that gets added by accident, because it reads as
-helpfulness. The safe wording is the one `NearQuotaBanner` already carries:
-**"You've hit your monthly limit. The VPN is paused until it resets."** It states
-what happened and recommends no remedy. Keep it that way.
-
-### What it allows
+The one that gets added by accident is an out-of-quota message that *suggests
+what to do about it*, because it reads as helpfulness. The safe wording is the
+one `NearQuotaBanner` already carries: **"You've hit your monthly limit. The VPN
+is paused until it resets."** It states what happened and recommends no remedy.
 
 Facts are fine: remaining quota, an expiry date, "paused until it resets".
-Signing in and managing an existing account is fine. So is redeeming a voucher,
-as long as it is redeemed and not bought.
-
-And the useful one, straight from the 3.1.3 preamble: *"Developers can send
-communications outside of the app to their user base about purchasing methods
-other than in-app purchase."* So the renewal reminder is an **email** sent by the
-backend. The app stays silent; the email does the talking.
-
-⚠️ The legal links resolve to `AppConfig.baseURL` + `/privacy` and `/terms`. Once
-that site has a pricing page, check those two pages do not carry a "Buy" item in
-their navigation — reviewers occasionally read that as steering.
-
-Adding StoreKit later is additive and breaks nothing. IAP was not skipped over
-the 15%; it was skipped because the tunnel was unproven on hardware at the time,
-and two unverified things at once is one too many. The tunnel is proven now, so
-that particular reason has expired — the monetisation reasoning above has not,
-and it is the one that governs.
+Signing in and managing an existing account is fine.
 
 ## Naming
 

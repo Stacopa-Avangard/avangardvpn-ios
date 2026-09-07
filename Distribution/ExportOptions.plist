@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Export options for the TestFlight build. Used by `xcodebuild -exportArchive`
-  in .github/workflows/ios-release.yml.
+  Export options template for a TestFlight build, passed to
+  `xcodebuild -exportArchive`.
+
+  teamID is a placeholder. Substitute it at build time — no account identifier
+  belongs in this repository.
 
   signingStyle is automatic on purpose. The alternative is checking two
   provisioning profiles into the repo and rotating them by hand every year,
@@ -20,7 +23,7 @@
   <key>method</key>
   <string>app-store-connect</string>
   <key>teamID</key>
-  <string>8HSUX5T86H</string>
+  <string>${AVANGARD_DEVELOPMENT_TEAM}</string>
   <key>signingStyle</key>
   <string>automatic</string>
   <!-- Symbols let App Store Connect symbolicate crash reports from testers.
