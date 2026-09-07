@@ -170,11 +170,10 @@ targets:
         # accepted, reported no error, and produced a build still stamped 1 —
         # which App Store Connect rejects as a duplicate build number.
         #
-        # That is the bug `ios-release.yml` carries too: it passes
-        # CURRENT_PROJECT_VERSION=${{ github.run_number }} and would have
-        # shipped every build as number 1. It has never run, so nothing caught
-        # it. The app and the extension must also agree — a mismatch fails the
-        # upload — which is why the same two lines appear in both targets.
+        # Any CI that passes CURRENT_PROJECT_VERSION on the command line hits
+        # the same trap. The app and the extension must also agree — a mismatch
+        # fails the upload — which is why the same two lines appear in both
+        # targets.
         #
         # Written as `$(…)` the value survives into the plist and Xcode expands
         # it at build time, so the command line finally wins.
@@ -189,75 +188,25 @@ targets:
         # still held to full ATS requirements.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # ⚠️ ITSAppUsesNonExemptEncryption is deliberately ABSENT, and the
-        # answer it used to carry is still TRUE. Only the place it is declared
-        # changed.
+        # ⚠️ ITSAppUsesNonExemptEncryption is deliberately ABSENT here. The
+        # answer is TRUE, and it is declared in App Store Connect instead.
         #
-        # It lived here so App Store Connect would stop asking per build. App
-        # Store Connect rejects that:
+        # TRUE is the accurate answer, not the easy NO: the embedded
+        # wireguard-go carries its own ChaCha20-Poly1305, Curve25519 and
+        # BLAKE2s, so the "only uses encryption provided by the operating
+        # system" exemption does not apply — that one fits an app whose crypto
+        # is HTTPS through URLSession. The app does qualify for the
+        # industry-standard-algorithms exemption; every primitive is an IETF
+        # RFC (8439, 7748, 7693).
         #
-        #   ITMS-90592: Invalid Export Compliance Code. The export compliance
-        #   key value [] in the app's Info.plist doesn't match the key value of
-        #   the app's export compliance documentation.
+        # The key may only carry a compliance code once App Encryption
+        # Documentation is on file. None is, so there is no code to pair it
+        # with and the key cannot stay here.
         #
-        # YES in the plist is a claim that documentation is already on file,
-        # and Apple then wants ITSEncryptionExportComplianceCode alongside it.
-        # That code only exists once App Encryption Documentation is filed in
-        # App Store Connect -- which for this app is not filed, and per the
-        # CCATS note below probably never needs to be. With no code to pair it
-        # with, the key cannot stay.
-        #
-        # So the declaration moves to App Store Connect's questionnaire, where
-        # the answer is the same: uses non-exempt encryption, qualifies for
-        # exemption as industry-standard algorithms not provided by the OS. It
-        # is asked once and can be applied to later builds.
-        #
-        # Everything below is why TRUE is the accurate answer. It has not
-        # changed and is the reason not to reach for the easy NO. Getting it
-        # wrong is a false declaration to a US government process, not a
-        # checkbox.
-        #
-        # The exemption people reach for is "only uses encryption available in
-        # the operating system". That fits an app whose crypto is HTTPS through
-        # URLSession. It does not fit this one: wireguard-go carries its own
-        # ChaCha20-Poly1305, Curve25519 and BLAKE2s, compiled into the extension
-        # we embed. None of the other exemptions (authentication-only, DRM,
-        # medical) come close either. A VPN is the textbook non-exempt case.
-        #
-        # ⚠️ It does not complete export compliance — but it commits us to
-        # less than the first version of this comment claimed. Checked against
-        # BIS and Apple on 2026-09-02:
-        #
-        #   - No ERN. BIS removed the encryption-registration requirement in its
-        #     rule of 29 March 2021. There is nothing to register before
-        #     exporting, and no SNAP-R account to open.
-        #   - Probably no CCATS. Apple demands one only for PROPRIETARY
-        #     algorithms no standards body accepts. Every primitive here is an
-        #     IETF RFC — ChaCha20-Poly1305 (8439), Curve25519 (7748), BLAKE2s
-        #     (7693) — which lands us in Apple's "industry standard algorithm,
-        #     not provided within the Apple operating system" row instead.
-        #   - France declaration only if the app is sold on the French App
-        #     Store. An Indonesia-only release owes nothing here.
-        #   - The annual ECCN 5D002 self-classification report under License
-        #     Exception ENC §740.17(b)(1) is RETROSPECTIVE, not a precondition:
-        #     due 1 February for the PREVIOUS calendar year, and not owed at all
-        #     for a year with no exports. CSV, 12 columns, emailed to
-        #     crypt-supp8@bis.doc.gov and enc@nsa.gov. (This line said
-        #     crypt@bis.doc.gov until 2026-09-04; BIS's own page gives the
-        #     -supp8 address, and a report sent elsewhere is a report not sent.)
-        #     The whole picture, including why every other WireGuard VPN
-        #     answers the opposite way, is in EXPORT-COMPLIANCE.md.
-        #
-        # So the only export step between this key and a release is App Store
-        # Connect's own questionnaire. US EAR applies at all because the App
-        # Store distributes from the US; an Indonesian developer account does
-        # not change that.
-        #
-        # The CCATS row is the one judgement worth a professional opinion: if
-        # anyone reads wireguard-go's protocol as proprietary rather than
-        # standard, a CCATS is a BIS submission with a waiting period attached.
-        # That is also the only path that would produce a compliance code, and
-        # so the only thing that would let the key come back here.
+        # ⛔ In App Store Connect the answer is write-once per build. Once a
+        # build has a value, the API refuses to change it — HTTP 409, "You
+        # cannot update when the value is already set" — so it has to be right
+        # on the first upload of each build.
     # ⚠️ The app carries the SAME networkextension entitlement as the extension
     # it embeds, and that is not a copy-paste slip. NETunnelProviderManager —
     # the API the app uses to save the VPN configuration and start the tunnel —
